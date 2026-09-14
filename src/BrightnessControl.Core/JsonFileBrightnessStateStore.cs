@@ -2,8 +2,6 @@ using System.Text.Json;
 
 namespace BrightnessControl.Core;
 
-// Расположение файла — временное разумное значение (%LocalAppData%); выбор
-// portable-режима (FP7) позже сможет передать сюда другой filePath.
 public sealed class JsonFileBrightnessStateStore : IBrightnessStateStore
 {
     private readonly string _filePath;
@@ -12,10 +10,7 @@ public sealed class JsonFileBrightnessStateStore : IBrightnessStateStore
 
     public JsonFileBrightnessStateStore(string? filePath = null)
     {
-        _filePath = filePath ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "BrightnessControl",
-            "brightness-state.json");
+        _filePath = filePath ?? Path.Combine(AppPaths.BaseDirectory, "brightness-state.json");
 
         _values = Load(_filePath);
     }

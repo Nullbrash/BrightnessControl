@@ -8,10 +8,7 @@ public sealed class JsonFileAutomationStore : IAutomationStore
 
     public JsonFileAutomationStore(string? filePath = null)
     {
-        _filePath = filePath ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "BrightnessControl",
-            "automation.json");
+        _filePath = filePath ?? Path.Combine(AppPaths.BaseDirectory, "automation.json");
     }
 
     public AutomationSettings Load()

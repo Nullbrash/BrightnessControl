@@ -16,10 +16,7 @@ public sealed class JsonFileMonitorPacingStore : IMonitorPacingStore
 
     public JsonFileMonitorPacingStore(string? filePath = null)
     {
-        _filePath = filePath ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "BrightnessControl",
-            "monitor-pacing.json");
+        _filePath = filePath ?? Path.Combine(AppPaths.BaseDirectory, "monitor-pacing.json");
 
         _values = Load(_filePath);
     }

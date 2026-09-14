@@ -1,4 +1,5 @@
 using System.Text.Json;
+using BrightnessControl.Core;
 
 namespace BrightnessControl.App.Services;
 
@@ -8,10 +9,7 @@ public sealed class AppSettingsStore
 
     public AppSettingsStore(string? filePath = null)
     {
-        _filePath = filePath ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "BrightnessControl",
-            "app-settings.json");
+        _filePath = filePath ?? Path.Combine(AppPaths.BaseDirectory, "app-settings.json");
     }
 
     public AppSettings Load()

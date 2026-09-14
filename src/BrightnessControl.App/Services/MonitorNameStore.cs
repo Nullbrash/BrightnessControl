@@ -1,4 +1,5 @@
 using System.Text.Json;
+using BrightnessControl.Core;
 
 namespace BrightnessControl.App.Services;
 
@@ -6,21 +7,13 @@ namespace BrightnessControl.App.Services;
 // как и везде в проекте, это BrightnessController.GetMonitorKey(monitor), не
 // индекс/название по умолчанию (та же логика идентификации, что уже
 // используется для яркости, расписания, профилей приложений).
-// Расположение файла — %LocalAppData% (свой на каждого пользователя Windows),
-// как и остальные хранилища проекта; выбор portable-режима (FP7, пока не
-// реализован ни для одного стора в проекте) сможет позже передать сюда общий
-// filePath для всех пользователей сразу — конструктор уже принимает filePath
-// явно именно ради этого, тем же способом, что и другие Store-классы.
 public sealed class MonitorNameStore
 {
     private readonly string _filePath;
 
     public MonitorNameStore(string? filePath = null)
     {
-        _filePath = filePath ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "BrightnessControl",
-            "monitor-names.json");
+        _filePath = filePath ?? Path.Combine(AppPaths.BaseDirectory, "monitor-names.json");
     }
 
     public Dictionary<string, string> Load()

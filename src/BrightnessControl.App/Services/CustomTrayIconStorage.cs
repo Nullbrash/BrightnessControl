@@ -1,3 +1,5 @@
+using BrightnessControl.Core;
+
 namespace BrightnessControl.App.Services;
 
 // FP11 — одна запись в TraySettings.CustomTrayIcons: Id — сгенерированный GUID
@@ -16,10 +18,7 @@ public sealed record CustomTrayIcon(string Id, string FileName, string DisplayNa
 // файла, тот же принцип, что и у остальных хранилищ проекта.
 public static class CustomTrayIconStorage
 {
-    private static string FolderPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "BrightnessControl",
-        "tray-icons");
+    private static string FolderPath => Path.Combine(AppPaths.BaseDirectory, "tray-icons");
 
     public static CustomTrayIcon Import(string sourceFilePath)
     {

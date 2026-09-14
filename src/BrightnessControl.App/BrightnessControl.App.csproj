@@ -5,6 +5,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- FP7 — единственный источник правды для версии (заглушка, финальная
+         схема версионирования — отдельный вопрос, не решён). Читается в
+         рантайме через AppVersion.Current (Services/AppVersion.cs), нигде
+         не завязана на app.manifest — тот нигде кодом не читается. -->
+    <Version>0.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

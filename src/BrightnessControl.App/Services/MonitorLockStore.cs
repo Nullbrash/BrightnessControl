@@ -1,4 +1,5 @@
 using System.Text.Json;
+using BrightnessControl.Core;
 
 namespace BrightnessControl.App.Services;
 
@@ -14,10 +15,7 @@ public sealed class MonitorLockStore
 
     public MonitorLockStore(string? filePath = null)
     {
-        _filePath = filePath ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "BrightnessControl",
-            "monitor-locks.json");
+        _filePath = filePath ?? Path.Combine(AppPaths.BaseDirectory, "monitor-locks.json");
     }
 
     public HashSet<string> Load()

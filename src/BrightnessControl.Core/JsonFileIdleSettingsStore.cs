@@ -8,10 +8,7 @@ public sealed class JsonFileIdleSettingsStore : IIdleSettingsStore
 
     public JsonFileIdleSettingsStore(string? filePath = null)
     {
-        _filePath = filePath ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "BrightnessControl",
-            "idle-settings.json");
+        _filePath = filePath ?? Path.Combine(AppPaths.BaseDirectory, "idle-settings.json");
     }
 
     public IdleSettings Load()

@@ -32,6 +32,22 @@ public sealed class AccentColorService : IDisposable
         _appSettings = appSettings;
         _appSettingsStore = appSettingsStore;
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+
+        // Живой баг: тема "Системная" + тёмная ОС — цвета из ApplyAccentBrushes
+        // (в частности AppAccentBackgroundBrush, используется для ховера пункта
+        // навигации) считались ОДИН раз при старте по Application.Current
+        // .ActualThemeVariant, снятому в этот самый момент — если он тогда ещё
+        // не успел резолвиться в Dark (или пользователь позже переключил тему в
+        // настройках без пересоздания сервиса), палитра насчитывалась под
+        // светлую тему и застревала такой навсегда: ничего не пересчитывало её
+        // при смене темы, только при смене АКЦЕНТНОГО цвета/схемы гармонии.
+        // Подписка на ActualThemeVariantChanged — тот же реактивный принцип, что
+        // уже применён для SystemEvents.UserPreferenceChanged ниже.
+        if (Application.Current is { } app)
+        {
+            app.ActualThemeVariantChanged += OnActualThemeVariantChanged;
+        }
+
         Apply();
     }
 
@@ -70,6 +86,8 @@ public sealed class AccentColorService : IDisposable
             Dispatcher.UIThread.Post(Apply);
         }
     }
+
+    private void OnActualThemeVariantChanged(object? sender, EventArgs e) => Apply();
 
     public void Apply()
     {
@@ -176,7 +194,10 @@ public sealed class AccentColorService : IDisposable
         app.Resources["AppAccentBackgroundVariantBrush"] = new SolidColorBrush(palette.AccentBackgroundVariant);
     }
 
-    private static Color GetContrastingTextColor(Color background)
+    // internal (не private) — FP7 Фаза 3: App.axaml.cs использует её же для
+    // временной подкраски FirstRunWindow (окно показывается ДО того, как этот
+    // сервис вообще создан — см. BootstrapAccentColorForFirstRun).
+    internal static Color GetContrastingTextColor(Color background)
     {
         var luminance = (0.299 * background.R + 0.587 * background.G + 0.114 * background.B) / 255.0;
         return luminance > 0.6 ? Color.FromRgb(0x1B, 0x13, 0x18) : Colors.White;
@@ -194,7 +215,7 @@ public sealed class AccentColorService : IDisposable
         return created;
     }
 
-    private static bool TryGetWindowsAccentColor(out Color color)
+    internal static bool TryGetWindowsAccentColor(out Color color)
     {
         if (Dwmapi.DwmGetColorizationColor(out var raw, out _) != 0)
         {
@@ -229,5 +250,9 @@ public sealed class AccentColorService : IDisposable
 
         _disposed = true;
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+        if (Application.Current is { } app)
+        {
+            app.ActualThemeVariantChanged -= OnActualThemeVariantChanged;
+        }
     }
 }

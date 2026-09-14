@@ -1,20 +1,17 @@
 using System.Text.Json;
+using BrightnessControl.Core;
 
 namespace BrightnessControl.App.Services;
 
 // Значение по умолчанию (10%) уже сейчас настраиваемо — хранится в файле, а не
-// зашито в код. Полноценный UI для его редактирования появится в FP3; расположение
-// файла позже сможет переопределяться выбором portable-режима (FP7).
+// зашито в код. Полноценный UI для его редактирования появится в FP3.
 public sealed class TraySettingsStore
 {
     private readonly string _filePath;
 
     public TraySettingsStore(string? filePath = null)
     {
-        _filePath = filePath ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "BrightnessControl",
-            "tray-settings.json");
+        _filePath = filePath ?? Path.Combine(AppPaths.BaseDirectory, "tray-settings.json");
     }
 
     public TraySettings Load()
