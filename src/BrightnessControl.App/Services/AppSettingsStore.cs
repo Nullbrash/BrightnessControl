@@ -26,6 +26,7 @@ public sealed class AppSettingsStore
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
+            DebugLog.Write($"AppSettingsStore.Load: не удалось прочитать '{_filePath}': {ex}");
             return new AppSettings();
         }
     }
@@ -44,6 +45,7 @@ public sealed class AppSettingsStore
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            DebugLog.Write($"AppSettingsStore.Save: не удалось сохранить '{_filePath}': {ex}");
         }
     }
 }

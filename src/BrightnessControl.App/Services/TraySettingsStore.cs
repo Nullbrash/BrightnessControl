@@ -28,6 +28,7 @@ public sealed class TraySettingsStore
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
+            DebugLog.Write($"TraySettingsStore.Load: не удалось прочитать '{_filePath}': {ex}");
             return new TraySettings();
         }
     }
@@ -46,6 +47,7 @@ public sealed class TraySettingsStore
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            DebugLog.Write($"TraySettingsStore.Save: не удалось сохранить '{_filePath}': {ex}");
         }
     }
 }

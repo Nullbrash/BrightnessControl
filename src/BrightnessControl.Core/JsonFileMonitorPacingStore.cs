@@ -52,6 +52,7 @@ public sealed class JsonFileMonitorPacingStore : IMonitorPacingStore
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
+            DebugLog.Write($"JsonFileMonitorPacingStore.Load: не удалось прочитать '{path}': {ex}");
             return new Dictionary<string, int>();
         }
     }
@@ -70,6 +71,7 @@ public sealed class JsonFileMonitorPacingStore : IMonitorPacingStore
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            DebugLog.Write($"JsonFileMonitorPacingStore.Save: не удалось сохранить '{_filePath}': {ex}");
         }
     }
 }

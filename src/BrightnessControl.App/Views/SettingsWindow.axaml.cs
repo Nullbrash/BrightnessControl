@@ -1524,6 +1524,59 @@ public partial class SettingsWindow : Window
         };
         prereleaseRow.Children.Add(prereleaseCheckBox);
         root.Children.Add(prereleaseRow);
+
+        // FP16 Фаза 7 — усиленное логирование для разбора багов по запросу
+        // пользователей. Размещено на этой же вкладке (согласовано явно) —
+        // отдельной вкладки "Логи" не заводим. Переключатель управляет
+        // DebugLog.VerboseEnabled ЖИВЬЁМ, без перезапуска движков (см.
+        // AutomationEngine/IdleEngine — их решения логируются через
+        // WriteVerbose). Критические ошибки (крэши, сбои сохранения
+        // настроек) пишутся в лог ВСЕГДА, независимо от переключателя.
+        root.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 8) });
+        root.Children.Add(new TextBlock { Text = "Диагностика", FontWeight = Avalonia.Media.FontWeight.Bold, Margin = new Thickness(0, 0, 0, 6) });
+
+        var verboseRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        var verboseCheckBox = new CheckBox { Content = "Подробные логи", IsChecked = _appSettings.VerboseLoggingEnabled };
+        ToolTip.SetTip(verboseCheckBox, "Записывает решения автоматизации и приглушения по бездействию в лог — полезно, только если нужно разобрать конкретный баг. Ошибки и сбои логируются всегда, независимо от этого переключателя.");
+        verboseCheckBox.IsCheckedChanged += (_, _) =>
+        {
+            _appSettings.VerboseLoggingEnabled = verboseCheckBox.IsChecked ?? false;
+            _appSettingsStore.Save(_appSettings);
+            DebugLog.VerboseEnabled = _appSettings.VerboseLoggingEnabled;
+        };
+        verboseRow.Children.Add(verboseCheckBox);
+        root.Children.Add(verboseRow);
+
+        // HorizontalAlignment.Left — без него Button внутри вертикального
+        // StackPanel растягивается на всю ширину вкладки (замечание
+        // пользователя со скриншота: "зачем такая длинная кнопка"), в отличие
+        // от остальных кнопок этой вкладки, которые живут в горизонтальных
+        // StackPanel и поэтому по ширине контента.
+        var openLogButton = new Button { Content = "Открыть папку с логом", Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
+        openLogButton.Click += (_, _) =>
+        {
+            try
+            {
+                Directory.CreateDirectory(DebugLog.LogDirectory);
+                // explorer /select — открывает папку С ВЫДЕЛЕННЫМ debug.log,
+                // а не голый список из десятка других JSON-файлов настроек
+                // (замечание пользователя со скриншота — папка одна на все
+                // сторы, ничего кроме этого файла тут не подсвечивалось).
+                if (File.Exists(DebugLog.LogFilePath))
+                {
+                    Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{DebugLog.LogFilePath}\"") { UseShellExecute = true });
+                }
+                else
+                {
+                    Process.Start(new ProcessStartInfo(DebugLog.LogDirectory) { UseShellExecute = true });
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+            {
+                DebugLog.Write($"BuildUpdatesTab: не удалось открыть папку с логом '{DebugLog.LogDirectory}': {ex}");
+            }
+        };
+        root.Children.Add(openLogButton);
     }
 
     // Стиль HUD — параметрический выбор (FP12 Фаза 4, п.6), по аналогии с

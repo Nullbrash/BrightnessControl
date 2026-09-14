@@ -117,7 +117,12 @@ public sealed class AutomationEngine : IDisposable
                 _lastActiveRuleId[monitorKey] = winner?.Id;
                 if (winner is not null)
                 {
+                    DebugLog.WriteVerbose($"AutomationEngine: правило '{winner.Name}' -> монитор {monitorKey}: {winner.Percent}%");
                     _controller.SetBrightness(monitor, winner.Percent);
+                }
+                else if (lastId is not null)
+                {
+                    DebugLog.WriteVerbose($"AutomationEngine: монитор {monitorKey} — активных правил больше нет (было '{lastId}')");
                 }
             }
         }

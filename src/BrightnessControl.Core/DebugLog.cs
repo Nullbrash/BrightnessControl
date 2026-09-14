@@ -1,14 +1,31 @@
 namespace BrightnessControl.Core;
 
-// Временный диагностический лог для разбора нестабильного поведения DDC/CI у
-// конкретных мониторов — не постоянная логическая подсистема продукта.
+// FP7/FP16 Фаза 7 — усиленное логирование для разбора багов по запросу
+// пользователей. Путь ВСЕГДА фиксирован (%LocalAppData%, не через AppPaths) —
+// иначе лог первого запуска (до определения Portable/Installed) было бы
+// негде искать. Write — всегда пишет (крэши, сбои сохранения настроек и
+// т.п. должны попадать в лог независимо от переключателя "Подробные логи").
+// WriteVerbose — только пока VerboseEnabled=true (решения AutomationEngine/
+// IdleEngine на каждом тике — по умолчанию было бы слишком шумно).
 public static class DebugLog
 {
     private static readonly object Lock = new();
+    // Отдельная подпапка "logs" — по просьбе пользователя, для наглядности:
+    // иначе debug.log лежит вперемешку с десятком JSON-файлов настроек в
+    // одной папке (см. скриншот "Открыть папку с логом").
     private static readonly string FilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "BrightnessControl",
+        "logs",
         "debug.log");
+
+    // Устанавливается один раз при старте (из AppSettings.VerboseLoggingEnabled)
+    // и обновляется живьём при смене переключателя в настройках — без
+    // перезапуска движков.
+    public static bool VerboseEnabled { get; set; }
+
+    public static string LogDirectory => Path.GetDirectoryName(FilePath) ?? FilePath;
+    public static string LogFilePath => FilePath;
 
     public static void Write(string message)
     {
@@ -27,6 +44,14 @@ public static class DebugLog
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+        }
+    }
+
+    public static void WriteVerbose(string message)
+    {
+        if (VerboseEnabled)
+        {
+            Write(message);
         }
     }
 }

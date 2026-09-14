@@ -1,4 +1,5 @@
 using System.Text.Json;
+using BrightnessControl.Core;
 
 namespace BrightnessControl.App.Services;
 
@@ -64,6 +65,10 @@ public sealed class StorageModeStore
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
+            // Замечено на практике (2026-09-14): битый JSON здесь молча
+            // трактуется как "первый запуск" — без этой записи в лог не было
+            // видно, что storage-mode.json вообще существовал и не читался.
+            DebugLog.Write($"StorageModeStore.Load: не удалось прочитать '{_filePath}' (будет расценено как первый запуск): {ex}");
             return null;
         }
     }
@@ -82,6 +87,7 @@ public sealed class StorageModeStore
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            DebugLog.Write($"StorageModeStore.Save: не удалось сохранить '{_filePath}': {ex}");
         }
     }
 }

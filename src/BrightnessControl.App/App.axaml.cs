@@ -144,6 +144,7 @@ public partial class App : Application
         _traySettings = _traySettingsStore.Load();
         _appSettingsStore = new AppSettingsStore();
         _appSettings = _appSettingsStore.Load();
+        DebugLog.VerboseEnabled = _appSettings.VerboseLoggingEnabled;
         ApplyTheme(_appSettings.Theme);
         _accentColorService = new AccentColorService(_appSettings, _appSettingsStore);
         _globalPercent = ComputeInitialGlobalPercent(_brightnessController);

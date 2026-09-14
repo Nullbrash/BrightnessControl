@@ -30,6 +30,7 @@ public sealed class MonitorNameStore
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
+            DebugLog.Write($"MonitorNameStore.Load: не удалось прочитать '{_filePath}': {ex}");
             return new Dictionary<string, string>();
         }
     }
@@ -48,6 +49,7 @@ public sealed class MonitorNameStore
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            DebugLog.Write($"MonitorNameStore.Save: не удалось сохранить '{_filePath}': {ex}");
         }
     }
 }

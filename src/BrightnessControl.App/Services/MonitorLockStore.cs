@@ -32,6 +32,7 @@ public sealed class MonitorLockStore
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
+            DebugLog.Write($"MonitorLockStore.Load: не удалось прочитать '{_filePath}': {ex}");
             return new HashSet<string>();
         }
     }
@@ -50,6 +51,7 @@ public sealed class MonitorLockStore
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            DebugLog.Write($"MonitorLockStore.Save: не удалось сохранить '{_filePath}': {ex}");
         }
     }
 }

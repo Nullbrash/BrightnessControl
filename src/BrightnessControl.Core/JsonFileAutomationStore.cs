@@ -25,6 +25,7 @@ public sealed class JsonFileAutomationStore : IAutomationStore
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
+            DebugLog.Write($"JsonFileAutomationStore.Load: не удалось прочитать '{_filePath}': {ex}");
             return new AutomationSettings();
         }
     }
@@ -43,6 +44,7 @@ public sealed class JsonFileAutomationStore : IAutomationStore
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            DebugLog.Write($"JsonFileAutomationStore.Save: не удалось сохранить '{_filePath}': {ex}");
         }
     }
 }

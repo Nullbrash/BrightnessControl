@@ -80,10 +80,12 @@ public sealed class IdleEngine : IDisposable
 
             if (timeoutReached && !_isDimmed)
             {
+                DebugLog.WriteVerbose($"IdleEngine: простой {idleDuration:mm\\:ss} >= таймаута ({settings.IdleTimeoutMinutes} мин) -> приглушение до {settings.DimPercent}%");
                 DimAll(settings.DimPercent);
             }
             else if (!timeoutReached && _isDimmed)
             {
+                DebugLog.WriteVerbose($"IdleEngine: активность обнаружена -> восстановление яркости");
                 RestoreAll();
             }
         }

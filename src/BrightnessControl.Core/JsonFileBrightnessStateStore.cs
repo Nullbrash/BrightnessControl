@@ -46,6 +46,7 @@ public sealed class JsonFileBrightnessStateStore : IBrightnessStateStore
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
+            DebugLog.Write($"JsonFileBrightnessStateStore.Load: не удалось прочитать '{path}': {ex}");
             return new Dictionary<string, int>();
         }
     }
@@ -65,6 +66,7 @@ public sealed class JsonFileBrightnessStateStore : IBrightnessStateStore
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // Не удалось сохранить состояние — не критично, просто потеряем последнее значение при рестарте.
+            DebugLog.Write($"JsonFileBrightnessStateStore.Save: не удалось сохранить '{_filePath}': {ex}");
         }
     }
 }

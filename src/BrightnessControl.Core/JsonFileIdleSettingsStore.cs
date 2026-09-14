@@ -25,6 +25,7 @@ public sealed class JsonFileIdleSettingsStore : IIdleSettingsStore
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
+            DebugLog.Write($"JsonFileIdleSettingsStore.Load: не удалось прочитать '{_filePath}': {ex}");
             return new IdleSettings();
         }
     }
@@ -43,6 +44,7 @@ public sealed class JsonFileIdleSettingsStore : IIdleSettingsStore
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            DebugLog.Write($"JsonFileIdleSettingsStore.Save: не удалось сохранить '{_filePath}': {ex}");
         }
     }
 }

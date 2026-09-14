@@ -72,4 +72,11 @@ public sealed class AppSettings
     public UpdateCheckInterval UpdateCheckIntervalPreference { get; set; } = UpdateCheckInterval.Daily;
     public UpdateChannel UpdateChannelPreference { get; set; } = UpdateChannel.AllReleases;
     public bool IncludePrereleaseUpdates { get; set; }
+
+    // FP16 Фаза 7 — по умолчанию ВЫКЛЮЧЕН: решения AutomationEngine/IdleEngine
+    // логируются на каждом изменённом тике, у активных пользователей автоматизации
+    // это может быстро раздуть debug.log. Критические ошибки (крэши, сбои
+    // Store.Save/Load) логируются ВСЕГДА, независимо от этого переключателя —
+    // см. DebugLog.Write vs DebugLog.WriteVerbose.
+    public bool VerboseLoggingEnabled { get; set; }
 }
