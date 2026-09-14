@@ -27,6 +27,13 @@ public static class DebugLog
     public static string LogDirectory => Path.GetDirectoryName(FilePath) ?? FilePath;
     public static string LogFilePath => FilePath;
 
+    // Без ротации лог рос бы бесконечно — особенно с VerboseEnabled=true и
+    // безусловным логированием DDC/CI (SetBrightness пишет несколько строк
+    // на каждый вызов). При превышении лимита текущий файл целиком уходит в
+    // .old (затирая предыдущий .old, если он был) — один предыдущий круг
+    // лога остаётся для контекста, вместо полной потери истории.
+    private const long MaxSizeBytes = 5 * 1024 * 1024;
+
     public static void Write(string message)
     {
         try
@@ -39,12 +46,30 @@ public static class DebugLog
                     Directory.CreateDirectory(directory);
                 }
 
+                RotateIfNeeded();
+
                 File.AppendAllText(FilePath, $"{DateTime.Now:HH:mm:ss.fff} [T{Environment.CurrentManagedThreadId}] {message}{Environment.NewLine}");
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
         }
+    }
+
+    private static void RotateIfNeeded()
+    {
+        if (!File.Exists(FilePath) || new FileInfo(FilePath).Length < MaxSizeBytes)
+        {
+            return;
+        }
+
+        var oldPath = FilePath + ".old";
+        if (File.Exists(oldPath))
+        {
+            File.Delete(oldPath);
+        }
+
+        File.Move(FilePath, oldPath);
     }
 
     public static void WriteVerbose(string message)

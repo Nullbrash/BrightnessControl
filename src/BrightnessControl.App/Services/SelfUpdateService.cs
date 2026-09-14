@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 
 namespace BrightnessControl.App.Services;
 
@@ -19,7 +20,12 @@ public static class SelfUpdateService
     // размер + скорость), а не голый статичный текст "Скачивание…".
     public readonly record struct DownloadProgress(long BytesReceived, long? TotalBytes, double BytesPerSecond);
 
-    public static async Task<string> DownloadUpdateAsync(string downloadUrl, IProgress<DownloadProgress>? progress = null)
+    // expectedSha256 — из "digest" ассета релиза (см.
+    // UpdateCheckResult.DownloadSha256); null, если GitHub его не отдал —
+    // проверка в этом случае тихо пропускается, а не блокирует обновление
+    // (это усиление, а не обязательное условие: MinimumExpectedSizeBytes
+    // ниже уже ловит явно битые/подменённые ответы).
+    public static async Task<string> DownloadUpdateAsync(string downloadUrl, IProgress<DownloadProgress>? progress = null, string? expectedSha256 = null)
     {
         using var httpClient = new HttpClient();
         httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("BrightnessControl-Updater", AppVersion.Current.ToString()));
@@ -68,6 +74,22 @@ public static class SelfUpdateService
         {
             File.Delete(tempPath);
             throw new InvalidOperationException($"Скачанный файл подозрительно мал ({downloadedSize} байт) — возможно, повреждён или ссылка ведёт не на exe.");
+        }
+
+        if (expectedSha256 is not null)
+        {
+            string actualSha256;
+            await using (var verifyStream = File.OpenRead(tempPath))
+            {
+                var hashBytes = await SHA256.HashDataAsync(verifyStream);
+                actualSha256 = Convert.ToHexString(hashBytes);
+            }
+
+            if (!string.Equals(actualSha256, expectedSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                File.Delete(tempPath);
+                throw new InvalidOperationException("Контрольная сумма скачанного файла не совпадает с ожидаемой — файл повреждён или подменён, обновление отменено.");
+            }
         }
 
         return tempPath;

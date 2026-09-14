@@ -25,6 +25,7 @@ public partial class App : Application
     private AccentColorService? _accentColorService;
     private MonitorLockService? _monitorLockService;
     private UpdateCheckService? _updateCheckService;
+    private StorageModeInfo? _storageMode;
     private int _globalPercent = 50;
     private int? _stickyClungValue;
 
@@ -133,6 +134,7 @@ public partial class App : Application
         // SelfUpdateService.ApplyUpdateAndRestart) — убираем на СЛЕДУЮЩЕМ
         // старте, тихо и best-effort.
         SelfUpdateService.CleanupOldExecutable();
+        _storageMode = storageMode;
 
         var baseDirectory = storageMode.Mode == StorageMode.Portable && storageMode.PortableExeDirectory is not null
             ? storageMode.PortableExeDirectory
@@ -302,6 +304,7 @@ public partial class App : Application
                 _accentColorService,
                 _trayService,
                 _updateCheckService,
+                _storageMode,
                 () => desktop.Shutdown());
             _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         }

@@ -10,6 +10,12 @@ public sealed class UpdateCheckResult
     public bool UpdateAvailable { get; init; }
     public string? LatestVersion { get; init; }
     public string? DownloadUrl { get; init; }
+    // FP7 — контрольная сумма ассета, если GitHub её отдал (поле "digest" у
+    // релиз-ассета, формат "sha256:<hex>", появилось у GitHub без
+    // объявления версии API — если когда-нибудь пропадёт/переименуется,
+    // здесь просто останется null, а SelfUpdateService.DownloadUpdateAsync
+    // тихо пропустит проверку, не блокируя обновление).
+    public string? DownloadSha256 { get; init; }
     public string? Error { get; init; }
     public DateTime CheckedAt { get; init; } = DateTime.Now;
 }
@@ -66,6 +72,7 @@ public sealed class UpdateCheckService
             Version? bestVersion = null;
             string? bestVersionText = null;
             string? bestDownloadUrl = null;
+            string? bestSha256 = null;
 
             foreach (var release in doc.RootElement.EnumerateArray())
             {
@@ -87,9 +94,19 @@ public sealed class UpdateCheckService
                     continue;
                 }
 
-                var isNewer = _appSettings.UpdateChannelPreference == UpdateChannel.MajorOnly
-                    ? version.Major > AppVersion.Current.Major
-                    : version > AppVersion.Current;
+                // MajorOnly/MajorMinor сравнивают только ПЕРВЫЕ N компонентов
+                // (Build/Revision игнорируются полностью — не только "не
+                // учитываются при сравнении", а физически обрезаются, иначе
+                // патч-версия с новым Build всё равно обошла бы фильтр за
+                // счёт равных Major/Minor). AllReleases — обычное сравнение
+                // Version на всех компонентах.
+                var isNewer = _appSettings.UpdateChannelPreference switch
+                {
+                    UpdateChannel.MajorOnly => version.Major > AppVersion.Current.Major,
+                    UpdateChannel.MajorMinor => new Version(version.Major, Math.Max(version.Minor, 0))
+                        > new Version(AppVersion.Current.Major, Math.Max(AppVersion.Current.Minor, 0)),
+                    _ => version > AppVersion.Current,
+                };
                 if (!isNewer)
                 {
                     continue;
@@ -101,6 +118,7 @@ public sealed class UpdateCheckService
                 }
 
                 string? downloadUrl = null;
+                string? sha256 = null;
                 if (release.TryGetProperty("assets", out var assets))
                 {
                     foreach (var asset in assets.EnumerateArray())
@@ -109,6 +127,10 @@ public sealed class UpdateCheckService
                         if (string.Equals(name, ExpectedAssetName, StringComparison.OrdinalIgnoreCase))
                         {
                             downloadUrl = asset.TryGetProperty("browser_download_url", out var urlProp) ? urlProp.GetString() : null;
+                            var digest = asset.TryGetProperty("digest", out var digestProp) ? digestProp.GetString() : null;
+                            sha256 = digest?.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) == true
+                                ? digest["sha256:".Length..]
+                                : null;
                             break;
                         }
                     }
@@ -117,6 +139,7 @@ public sealed class UpdateCheckService
                 bestVersion = version;
                 bestVersionText = versionText;
                 bestDownloadUrl = downloadUrl;
+                bestSha256 = sha256;
             }
 
             result = new UpdateCheckResult
@@ -124,6 +147,7 @@ public sealed class UpdateCheckService
                 UpdateAvailable = bestVersion is not null,
                 LatestVersion = bestVersionText,
                 DownloadUrl = bestDownloadUrl,
+                DownloadSha256 = bestSha256,
             };
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)

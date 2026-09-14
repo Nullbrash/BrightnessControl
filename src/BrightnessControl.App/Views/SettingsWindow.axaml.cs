@@ -27,6 +27,7 @@ public partial class SettingsWindow : Window
     private readonly AccentColorService? _accentColorService;
     private readonly TrayService? _trayService;
     private readonly UpdateCheckService? _updateCheckService;
+    private readonly StorageModeInfo? _storageMode;
     private readonly Action _onExitRequested;
 
     // FP13 — единственный экземпляр окна предпросмотра темы: повторный клик
@@ -58,6 +59,7 @@ public partial class SettingsWindow : Window
         _accentColorService = null;
         _trayService = null;
         _updateCheckService = null;
+        _storageMode = null;
         _onExitRequested = () => { };
         InitializeComponent();
     }
@@ -73,6 +75,7 @@ public partial class SettingsWindow : Window
         AccentColorService? accentColorService,
         TrayService? trayService,
         UpdateCheckService? updateCheckService,
+        StorageModeInfo? storageMode,
         Action onExitRequested)
     {
         _controller = controller;
@@ -85,6 +88,7 @@ public partial class SettingsWindow : Window
         _accentColorService = accentColorService;
         _trayService = trayService;
         _updateCheckService = updateCheckService;
+        _storageMode = storageMode;
         _onExitRequested = onExitRequested;
         InitializeComponent();
         BuildContent();
@@ -1147,12 +1151,44 @@ public partial class SettingsWindow : Window
         var versionRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         var versionLabel = new TextBlock { Text = "Версия приложения", FontWeight = Avalonia.Media.FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center };
         Grid.SetColumn(versionLabel, 0);
-        var versionValue = new TextBlock { Text = AppVersion.Current.ToString(3), VerticalAlignment = VerticalAlignment.Center };
+        // ToString(4), а не (3) — 3-е число (Фиксы) должно быть видно
+        // пользователям на канале "Релизы + обновления"/"Все версии", не
+        // только Major.Minor. 4-е (дебаг-тесты) у настоящих релизов всегда
+        // 0 — бампается только в тестовых, никогда не публикуемых всерьёз
+        // сборках (см. AppSettings.UpdateChannel).
+        var versionValue = new TextBlock { Text = AppVersion.Current.ToString(4), VerticalAlignment = VerticalAlignment.Center };
         versionValue.Bind(TextBlock.ForegroundProperty, this.GetResourceObservable("AppMuted"));
         Grid.SetColumn(versionValue, 1);
         versionRow.Children.Add(versionLabel);
         versionRow.Children.Add(versionValue);
         root.Children.Add(versionRow);
+
+        // Ссылка на подробное объяснение схемы версионирования (README на
+        // GitHub, по запросу пользователя) — нет прецедента гиперссылки в
+        // этом кодабейзе, оформлена вручную (подчёркивание + акцентный цвет
+        // + курсор-рука), т.к. отдельного Hyperlink-контрола под это нет.
+        var versionInfoLink = new TextBlock
+        {
+            Text = "Что означают числа версии?",
+            FontSize = 11,
+            TextDecorations = Avalonia.Media.TextDecorations.Underline,
+            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
+            Margin = new Thickness(0, 2, 0, 0),
+        };
+        versionInfoLink.Bind(TextBlock.ForegroundProperty, this.GetResourceObservable("AppAccentBrush"));
+        versionInfoLink.PointerPressed += (_, e) =>
+        {
+            e.Handled = true;
+            try
+            {
+                Process.Start(new ProcessStartInfo("https://github.com/Nullbrash/BrightnessControl#versioning") { UseShellExecute = true });
+            }
+            catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception)
+            {
+                DebugLog.Write($"BuildUpdatesTab: не удалось открыть README о версионировании: {ex}");
+            }
+        };
+        root.Children.Add(versionInfoLink);
 
         var statusCard = new Border
         {
@@ -1217,6 +1253,7 @@ public partial class SettingsWindow : Window
 
         string? pendingDownloadUrl = null;
         string? pendingVersion = null;
+        string? pendingSha256 = null;
         var awaitingConfirm = false;
         DispatcherTimer? confirmResetTimer = null;
 
@@ -1306,6 +1343,7 @@ public partial class SettingsWindow : Window
             installProgressText.IsVisible = false;
             pendingDownloadUrl = null;
             pendingVersion = null;
+            pendingSha256 = null;
 
             if (result is null)
             {
@@ -1334,6 +1372,7 @@ public partial class SettingsWindow : Window
                     statusSubtitle.IsVisible = false;
                     pendingDownloadUrl = result.DownloadUrl;
                     pendingVersion = result.LatestVersion;
+                    pendingSha256 = result.DownloadSha256;
                     installButton.IsVisible = true;
                     ResetInstallButtonText();
                 }
@@ -1406,7 +1445,7 @@ public partial class SettingsWindow : Window
 
             try
             {
-                var downloadedPath = await SelfUpdateService.DownloadUpdateAsync(pendingDownloadUrl, downloadProgress);
+                var downloadedPath = await SelfUpdateService.DownloadUpdateAsync(pendingDownloadUrl, downloadProgress, pendingSha256);
                 installProgressText.Text = "Установка и перезапуск…";
                 SelfUpdateService.ApplyUpdateAndRestart(downloadedPath);
                 // Новая копия уже запущена (ApplyUpdateAndRestart) — этот
@@ -1489,12 +1528,13 @@ public partial class SettingsWindow : Window
 
         var channelRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Margin = new Thickness(0, 8, 0, 0) };
         var channelLabel = new TextBlock { Text = "Канал обновлений:", VerticalAlignment = VerticalAlignment.Center, Width = 180 };
-        ToolTip.SetTip(channelLabel, "«Только крупные» пропускает промежуточные версии (например 1.1, 1.2) и предлагает обновление только когда вырос старший компонент версии — например 1.0 → 2.0.");
+        ToolTip.SetTip(channelLabel, "«Только релизы» — только крупные версии (например 1.0 → 2.0), минуя всё промежуточное. «Релизы + обновления» — то же плюс собранные обновления (1.0 → 1.1), но без мелких фиксов. «Все версии» — вообще всё, включая фиксы активной разработки.");
         channelRow.Children.Add(channelLabel);
         var channelOptions = new (UpdateChannel Value, string Label)[]
         {
+            (UpdateChannel.MajorOnly, "Только релизы"),
+            (UpdateChannel.MajorMinor, "Релизы + обновления"),
             (UpdateChannel.AllReleases, "Все версии"),
-            (UpdateChannel.MajorOnly, "Только крупные"),
         };
         var channelCombo = new ComboBox
         {
@@ -1524,6 +1564,36 @@ public partial class SettingsWindow : Window
         };
         prereleaseRow.Children.Add(prereleaseCheckBox);
         root.Children.Add(prereleaseRow);
+
+        // FP7 — отложенный пункт из первоначального плана ("Вне объёма
+        // сейчас"), реализован по прямому запросу пользователя. Виден
+        // только в режиме "Установить" (InstallService.Install включает
+        // автозапуск сразу при установке) — в Portable-режиме автозапуска
+        // нет вообще, переключатель показывать нечего.
+        if (_storageMode?.Mode == StorageMode.Installed)
+        {
+            root.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 8) });
+            root.Children.Add(new TextBlock { Text = "Автозапуск", FontWeight = Avalonia.Media.FontWeight.Bold, Margin = new Thickness(0, 0, 0, 6) });
+
+            var autostartRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+            var autostartCheckBox = new CheckBox { Content = "Запускать вместе с Windows", IsChecked = AutostartService.IsEnabled() };
+            autostartCheckBox.IsCheckedChanged += (_, _) =>
+            {
+                if (autostartCheckBox.IsChecked ?? false)
+                {
+                    if (Environment.ProcessPath is { } exePath)
+                    {
+                        AutostartService.Enable(exePath);
+                    }
+                }
+                else
+                {
+                    AutostartService.Disable();
+                }
+            };
+            autostartRow.Children.Add(autostartCheckBox);
+            root.Children.Add(autostartRow);
+        }
 
         // FP16 Фаза 7 — усиленное логирование для разбора багов по запросу
         // пользователей. Размещено на этой же вкладке (согласовано явно) —
