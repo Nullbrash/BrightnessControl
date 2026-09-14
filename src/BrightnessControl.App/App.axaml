@@ -313,15 +313,21 @@
         <ResourceDictionary>
             <ResourceDictionary.ThemeDictionaries>
                 <ResourceDictionary x:Key="Light">
-                    <SolidColorBrush x:Key="AppWindowBackground" Color="#FFFFFF" />
-                    <SolidColorBrush x:Key="AppSurface" Color="#F3F1F6" />
-                    <SolidColorBrush x:Key="AppSurfaceSunken" Color="#E8E5EE" />
-                    <SolidColorBrush x:Key="AppSurfaceHover" Color="#DEDAE8" />
+                    <!-- FP18 — "вариант C": диапазон уровней поверхности раздвинут
+                         (255→222 давало только 33 пункта яркости между фоном и hover —
+                         на светлом конце шкалы это read'ится как "всё белое", в отличие
+                         от тёмной темы с тем же приёмом 23→42). Согласовано с
+                         пользователем по Artifact-макету (страницы "Автоматизация" и
+                         "Иконка трея"). AppInk не менялся — уже достаточно тёмный. -->
+                    <SolidColorBrush x:Key="AppWindowBackground" Color="#F5F2FA" />
+                    <SolidColorBrush x:Key="AppSurface" Color="#E4DFEF" />
+                    <SolidColorBrush x:Key="AppSurfaceSunken" Color="#D3CCE3" />
+                    <SolidColorBrush x:Key="AppSurfaceHover" Color="#C2B9D6" />
                     <SolidColorBrush x:Key="AppInk" Color="#221D2C" />
-                    <SolidColorBrush x:Key="AppMuted" Color="#655E70" />
-                    <SolidColorBrush x:Key="AppFaint" Color="#8F899A" />
-                    <SolidColorBrush x:Key="AppLine" Color="#12000000" />
-                    <SolidColorBrush x:Key="AppLineStrong" Color="#1F000000" />
+                    <SolidColorBrush x:Key="AppMuted" Color="#544D61" />
+                    <SolidColorBrush x:Key="AppFaint" Color="#7A7389" />
+                    <SolidColorBrush x:Key="AppLine" Color="#33000000" />
+                    <SolidColorBrush x:Key="AppLineStrong" Color="#57000000" />
                     <!-- FP17 — официальные роли для danger/warning/good взамен цветов,
                          разбросанных ad-hoc по коду (не раз буквально скопированных из
                          тёмной темы литералом, из-за чего ломались в светлой). Ink-варианты —
@@ -332,8 +338,10 @@
                     <SolidColorBrush x:Key="AppWarning" Color="#E8C23D" />
                     <SolidColorBrush x:Key="AppWarningInk" Color="#241C02" />
                     <SolidColorBrush x:Key="AppGood" Color="#4E9C3B" />
-                    <SolidColorBrush x:Key="AppNeutralRest" Color="#0D655E70" />
-                    <SolidColorBrush x:Key="AppNeutralHover" Color="#24655E70" />
+                    <!-- FP18 — тинт пересчитан под новый AppMuted (#544D61), был на
+                         базе старого #655E70. -->
+                    <SolidColorBrush x:Key="AppNeutralRest" Color="#0D544D61" />
+                    <SolidColorBrush x:Key="AppNeutralHover" Color="#24544D61" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="AppWindowBackground" Color="#17151C" />

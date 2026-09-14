@@ -497,14 +497,15 @@ public partial class SettingsWindow : Window
 
     // Всё, что осталось от бывшей вкладки "Мониторы" — сами слайдеры яркости
     // переехали в поповер трея по левому клику (FP9 Фаза 2, GlobalSliderPopup).
+    // FP17 Фаза 4, п.9 — заголовок "Шаг слайдеров" убран: он только дублировал
+    // подпись единственной строки ниже (сама вкладка и так называется
+    // "Слайдеры яркости" в боковом меню). Подсказка перенесена на подпись.
     private void BuildSliderStepTab(StackPanel root)
     {
-        var sliderStepHeader = new TextBlock { Text = "Шаг слайдеров", FontWeight = Avalonia.Media.FontWeight.Bold };
-        ToolTip.SetTip(sliderStepHeader, "Слайдеры в поповере трея (левый клик по иконке) \"прилипают\" к этому шагу — отдельно от шага скролла над иконкой трея (см. \"Ярлык трея\").");
-        root.Children.Add(sliderStepHeader);
-
         var sliderStepRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
-        sliderStepRow.Children.Add(new TextBlock { Text = "Шаг слайдера:", VerticalAlignment = VerticalAlignment.Center, Width = 150 });
+        var sliderStepLabel = new TextBlock { Text = "Шаг слайдера:", VerticalAlignment = VerticalAlignment.Center, Width = 150 };
+        ToolTip.SetTip(sliderStepLabel, "Слайдеры в поповере трея (левый клик по иконке) \"прилипают\" к этому шагу — отдельно от шага скролла над иконкой трея (см. \"Ярлык трея\").");
+        sliderStepRow.Children.Add(sliderStepLabel);
         var sliderStepUpDown = BuildNumericStepper(1, 50, _appSettings.SliderStepPercent, "%");
         sliderStepUpDown.ValueChanged += (_, _) =>
         {
@@ -516,28 +517,32 @@ public partial class SettingsWindow : Window
         root.Children.Add(sliderStepRow);
     }
 
+    // FP17 Фаза 4, п.10 — заголовок "Скролл над иконкой трея" убран (дублировал
+    // текст чекбокса), чекбокс и степпер шага объединены в одну строку вместо
+    // трёх отдельных элементов. Подсказка на чекбоксе теперь ещё и объясняет,
+    // что такое "скролл" в этом контексте (раньше это нигде не поянялось).
     private void BuildTrayTab(StackPanel root)
     {
-        root.Children.Add(new TextBlock { Text = "Скролл над иконкой трея", FontWeight = Avalonia.Media.FontWeight.Bold });
-
-        var enabledCheckBox = new CheckBox { Content = "Включить скролл над иконкой трея", IsChecked = _traySettings.IsScrollEnabled };
+        var scrollRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        var enabledCheckBox = new CheckBox { Content = "Включить скролл над иконкой трея", VerticalAlignment = VerticalAlignment.Center };
+        ToolTip.SetTip(enabledCheckBox, "Колесо мыши над иконкой трея в системном лотке меняет яркость без открытия поповера — этот шаг настраивает, на сколько процентов меняется яркость за один щелчок колеса.");
+        enabledCheckBox.IsChecked = _traySettings.IsScrollEnabled;
         enabledCheckBox.IsCheckedChanged += (_, _) =>
         {
             _traySettings.IsScrollEnabled = enabledCheckBox.IsChecked ?? true;
             _traySettingsStore.Save(_traySettings);
         };
-        root.Children.Add(enabledCheckBox);
+        scrollRow.Children.Add(enabledCheckBox);
 
-        var stepRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
-        stepRow.Children.Add(new TextBlock { Text = "Шаг скролла:", VerticalAlignment = VerticalAlignment.Center, Width = 150 });
+        scrollRow.Children.Add(new TextBlock { Text = "Шаг:", VerticalAlignment = VerticalAlignment.Center });
         var stepUpDown = BuildNumericStepper(1, 50, _traySettings.ScrollStepPercent, "%");
         stepUpDown.ValueChanged += (_, _) =>
         {
             _traySettings.ScrollStepPercent = (int)(stepUpDown.Value ?? 10);
             _traySettingsStore.Save(_traySettings);
         };
-        stepRow.Children.Add(stepUpDown);
-        root.Children.Add(stepRow);
+        scrollRow.Children.Add(stepUpDown);
+        root.Children.Add(scrollRow);
 
         root.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 8) });
         var stickyHeader = new TextBlock { Text = "\"Липкие\" значения", FontWeight = Avalonia.Media.FontWeight.Bold };
@@ -545,44 +550,61 @@ public partial class SettingsWindow : Window
             "колеса), чтобы легко было попасть точно в них. Остальные проценты по-прежнему доступны без ограничений.");
         root.Children.Add(stickyHeader);
 
-        var stickyListPanel = new StackPanel { Spacing = 6 };
+        // FP17 Фаза 4, п.8 — компактные "чипы" в `UniformGrid` вместо карточек на
+        // всю ширину, число колонок подбирается тем же `ComputeOptimalColumns`,
+        // что уже уравнивает заполненность строк у галереи форм иконки трея
+        // (согласовано с пользователем: "как со списком иконок приложения").
+        // Тот же расчёт доступной ширины, что и в BuildTrayIconSection
+        // (availableGalleryWidth) — окно фиксированного размера (760px), но
+        // константа локальна для того метода, поэтому пересчитана здесь же.
+        const int availableStickyWidth = 760 - 2 - 170 - 32 - 18;
+        const int chipTotalWidth = 64 + 6; // сам чип (MinWidth) + Margin(0,0,6,6)
+        var maxStickyColumns = Math.Max(1, availableStickyWidth / chipTotalWidth);
+        var stickyGrid = new UniformGrid();
+        var stickyEmptyText = new TextBlock { Text = "(пока не задано ни одного значения)", FontStyle = Avalonia.Media.FontStyle.Italic, IsVisible = false };
 
         void RefreshStickyList()
         {
-            stickyListPanel.Children.Clear();
-            foreach (var value in _traySettings.StickyValues.OrderBy(v => v).ToList())
+            stickyGrid.Children.Clear();
+            var values = _traySettings.StickyValues.OrderBy(v => v).ToList();
+            stickyGrid.Columns = ComputeOptimalColumns(values.Count, maxStickyColumns);
+            stickyEmptyText.IsVisible = values.Count == 0;
+
+            foreach (var value in values)
             {
-                // FP17 Фаза 2 — строка обёрнута в карточку-стену (тот же приём, что
-                // и у карточек правил/галереи иконки трея): удаление встроено в
-                // правый край карточки, а не отдельная текстовая кнопка сбоку.
+                // FP17 Фаза 2/4 — та же карточка-стена, что и раньше (удаление
+                // встроено в правый край), просто сужена до компактного чипа.
                 var card = new Border
                 {
                     BorderBrush = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.FromArgb(0x40, 0x80, 0x80, 0x80)),
                     BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(14),
+                    CornerRadius = new CornerRadius(15),
                     ClipToBounds = true,
-                    MinHeight = 44,
+                    Height = 30,
+                    MinWidth = 64,
+                    Margin = new Thickness(0, 0, 6, 6),
                 };
                 card.Bind(Border.BackgroundProperty, this.GetResourceObservable("AppSurface"));
 
-                var cardGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,34") };
+                var cardGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,22") };
 
                 var valueText = new TextBlock
                 {
                     Text = $"{value}%",
+                    FontSize = 12,
                     FontWeight = Avalonia.Media.FontWeight.Bold,
                     VerticalAlignment = VerticalAlignment.Center,
-                    Margin = new Thickness(12, 0, 0, 0),
+                    Margin = new Thickness(10, 0, 0, 0),
                 };
                 Grid.SetColumn(valueText, 0);
 
                 var deleteGlyphBrush = new Avalonia.Media.SolidColorBrush();
                 var deleteButton = BuildSweepWallButton(
-                    BuildCrossGlyph(11, 2.0, deleteGlyphBrush),
+                    BuildCrossGlyph(9, 1.6, deleteGlyphBrush),
                     deleteGlyphBrush,
                     glyphRestColor: ResolveThemeColor("AppMuted", Avalonia.Media.Color.Parse("#948FA3")),
                     glyphHoverColor: ResolveThemeColor("AppDangerInk", Avalonia.Media.Colors.White),
-                    cornerRadius: new CornerRadius(0, 13, 13, 0),
+                    cornerRadius: new CornerRadius(0, 14, 14, 0),
                     restColor: ResolveThemeColor("AppNeutralRest", Avalonia.Media.Color.FromArgb(0x0D, 0x94, 0x8F, 0xA3)),
                     solidColor: ResolveThemeColor("AppDanger", Avalonia.Media.Color.Parse("#E85D6B")),
                     streakColor: ResolveThemeColor("AppDangerInk", Avalonia.Media.Colors.White),
@@ -602,34 +624,53 @@ public partial class SettingsWindow : Window
                 cardGrid.Children.Add(deleteButton);
                 card.Child = cardGrid;
 
-                stickyListPanel.Children.Add(card);
-            }
-
-            if (_traySettings.StickyValues.Count == 0)
-            {
-                stickyListPanel.Children.Add(new TextBlock { Text = "(пока не задано ни одного значения)", FontStyle = Avalonia.Media.FontStyle.Italic });
+                stickyGrid.Children.Add(card);
             }
         }
 
         RefreshStickyList();
-        root.Children.Add(stickyListPanel);
+        root.Children.Add(stickyGrid);
+        root.Children.Add(stickyEmptyText);
 
-        var addLabel = new TextBlock { Text = "Новое значение:", VerticalAlignment = VerticalAlignment.Center };
+        // FP17 Фаза 4, п.7 — одна строка (подпись + степпер + круглая кнопка "+")
+        // вместо подписи/степпера/широкой кнопки друг под другом. Тот же стиль
+        // круглой кнопки, что уже используется для добавления своего цвета
+        // иконки трея (см. addButton в RefreshColorRow).
+        var addRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Margin = new Thickness(0, 4, 0, 0) };
+        addRow.Children.Add(new TextBlock { Text = "Новое значение:", VerticalAlignment = VerticalAlignment.Center });
         var addValueInput = BuildNumericStepper(0, 100, 50, "%");
-        var addButton = new Button { Content = "Добавить как липкое" };
-        addButton.Click += (_, _) =>
-        {
-            var value = (int)(addValueInput.Value ?? 50);
-            if (!_traySettings.StickyValues.Contains(value))
+        addRow.Children.Add(addValueInput);
+
+        var addGlyphBrush = new Avalonia.Media.SolidColorBrush();
+        var addButton = BuildSweepWallButton(
+            BuildPlusGlyph(14, 2, addGlyphBrush),
+            addGlyphBrush,
+            glyphRestColor: ResolveThemeColor("AppMuted", Avalonia.Media.Color.Parse("#948FA3")),
+            glyphHoverColor: ResolveThemeColor("AppInk", Avalonia.Media.Color.Parse("#F1EEF7")),
+            cornerRadius: new CornerRadius(14),
+            restColor: ResolveThemeColor("AppNeutralRest", Avalonia.Media.Color.FromArgb(0x0D, 0x94, 0x8F, 0xA3)),
+            solidColor: ResolveThemeColor("AppNeutralHover", Avalonia.Media.Color.FromArgb(0x24, 0x94, 0x8F, 0xA3)),
+            streakColor: Avalonia.Media.Color.FromArgb(0x1E, 0xFF, 0xFF, 0xFF),
+            sweepStart: new RelativePoint(1, 0, RelativeUnit.Relative),
+            sweepEnd: new RelativePoint(0, 1, RelativeUnit.Relative),
+            isEnabled: true,
+            tooltip: "Добавить как липкое значение",
+            onClick: () =>
             {
-                _traySettings.StickyValues.Add(value);
-                _traySettingsStore.Save(_traySettings);
-                RefreshStickyList();
-            }
-        };
-        root.Children.Add(addLabel);
-        root.Children.Add(addValueInput);
-        root.Children.Add(addButton);
+                var value = (int)(addValueInput.Value ?? 50);
+                if (!_traySettings.StickyValues.Contains(value))
+                {
+                    _traySettings.StickyValues.Add(value);
+                    _traySettingsStore.Save(_traySettings);
+                    RefreshStickyList();
+                }
+            });
+        addButton.Width = 28;
+        addButton.Height = 28;
+        addButton.BorderThickness = new Thickness(1);
+        addButton.BorderBrush = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.FromArgb(0x60, 0x80, 0x80, 0x80));
+        addRow.Children.Add(addButton);
+        root.Children.Add(addRow);
     }
 
     // FP12 Фаза 4, п.8 — "+"/"×" рисуются векторной геометрией (Line), а не
@@ -1035,10 +1076,15 @@ public partial class SettingsWindow : Window
         _themePreviewWindow.Show(this);
     }
 
+    // FP17 Фаза 4, п.11/13 — "Тема" и "HUD с процентом" были заголовком над
+    // ComboBox на двух строках, теперь одна строка "Подпись: [ComboBox]" —
+    // тот же приём, что уже используется чуть ниже для "Цветовая комбинация:".
     private void BuildAppearanceTab(StackPanel root)
     {
-        root.Children.Add(new TextBlock { Text = "Тема", FontWeight = Avalonia.Media.FontWeight.Bold });
-        root.Children.Add(BuildThemeSelector());
+        var themeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        themeRow.Children.Add(new TextBlock { Text = "Тема:", VerticalAlignment = VerticalAlignment.Center, Width = 180 });
+        themeRow.Children.Add(BuildThemeSelector());
+        root.Children.Add(themeRow);
 
         root.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 8) });
         var accentCheckBox = new CheckBox { Content = "Использовать акцентный цвет Windows", IsChecked = _appSettings.UseWindowsAccentColor };
@@ -1076,9 +1122,12 @@ public partial class SettingsWindow : Window
         root.Children.Add(previewButton);
 
         root.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 8) });
-        root.Children.Add(new TextBlock { Text = "HUD с процентом", FontWeight = Avalonia.Media.FontWeight.Bold });
-        ToolTip.SetTip(root.Children[^1], "Всплывающее окошко с процентом, которое появляется при скролле над иконкой трея.");
-        root.Children.Add(BuildHudStyleSelector());
+        var hudStyleRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        var hudStyleLabel = new TextBlock { Text = "HUD с процентом:", VerticalAlignment = VerticalAlignment.Center, Width = 180 };
+        ToolTip.SetTip(hudStyleLabel, "Всплывающее окошко с процентом, которое появляется при скролле над иконкой трея.");
+        hudStyleRow.Children.Add(hudStyleLabel);
+        hudStyleRow.Children.Add(BuildHudStyleSelector());
+        root.Children.Add(hudStyleRow);
 
         root.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 8) });
         root.Children.Add(new TextBlock { Text = "Иконка трея", FontWeight = Avalonia.Media.FontWeight.Bold });
@@ -1194,7 +1243,15 @@ public partial class SettingsWindow : Window
         // порядка в разметке, но её Click-лямбда ссылается на ещё не объявленные
         // на этом месте локальные функции/переменные (renamingDesignId и т.п.), а
         // лямбда не может форвард-ссылаться на них, в отличие от локальных функций.
-        var importButton = new Button { Content = "Добавить свою иконку", Margin = new Thickness(0, 6, 0, 0) };
+        // FP17 Фаза 4, п.14 — компактная и по центру панели (была растянута на
+        // всю ширину, текст выровнен слева) — согласовано с пользователем.
+        var importButton = new Button
+        {
+            Content = "Добавить свою иконку",
+            Margin = new Thickness(0, 6, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+        };
         ToolTip.SetTip(importButton, "Подходит любое изображение в формате PNG/ICO/BMP/JPG. Для лучшего результата — квадратная картинка, желательно с прозрачным фоном (PNG). Цвет к своим иконкам не применяется, показываются как есть.");
         panel.Children.Add(importButton);
         panel.Children.Add(new TextBlock
@@ -1445,11 +1502,7 @@ public partial class SettingsWindow : Window
                 {
                     Width = 104,
                     Height = 88,
-                    Margin = new Thickness(4),
                     CornerRadius = new CornerRadius(8),
-                    // Прозрачный, но НЕ null — Border без явного фона не ловит клики в
-                    // "пустых" местах (за пределами children), только на самих детях.
-                    Background = Avalonia.Media.Brushes.Transparent,
                     BorderThickness = new Thickness(isSelected ? 2 : 1),
                     BorderBrush = isSelected ? accentBrush : neutralBorderBrush,
                     // Иначе прямоугольные боковые полосы (leftArrow/rightArrow) торчали
@@ -1458,6 +1511,38 @@ public partial class SettingsWindow : Window
                     ClipToBounds = true,
                     Cursor = handCursor,
                     Child = cardLayout,
+                };
+                // FP18 — раньше было Background=Transparent (нужен был только НЕ-null
+                // фон, чтобы клики в "пустых" местах карточки ловились, а не проваливались
+                // сквозь неё) — из-за этого карточка визуально сливалась с фоном ВСЕГО
+                // окна вместо своей собственной заливки, особенно заметно на новой,
+                // более контрастной светлой палитре ("ВООБЩЕ не помогло на странице с
+                // иконками" — живой фидбег). Теперь честно залита AppSurface, как и
+                // остальные карточки в приложении.
+                card.Bind(Border.BackgroundProperty, this.GetResourceObservable("AppSurface"));
+
+                // FP18 — плоской разницы заливки соседних светлых тонов оказалось
+                // недостаточно (живой фидбек: "вроде лучше, а вроде фигня всё-равно") —
+                // на светлом конце шкалы глаз плохо различает соседние оттенки яркости,
+                // сколько её ни раздвигай. Тень (elevation) добавляет ощущение глубины
+                // независимо от того, насколько близки тона фона и карточки — на тёмном
+                // фоне тень того же чёрного цвета остаётся почти незаметной, поэтому
+                // безопасно применять без ветвления по теме. ВАЖНО: тень повешена на
+                // ОТДЕЛЬНЫЙ внешний Border, а не на сам `card` — у `card` стоит
+                // ClipToBounds=true (нужен для скругления углов стен leftArrow/rightArrow)
+                // и он обрезал бы тень, выходящую за собственные границы.
+                var cardShadowWrapper = new Border
+                {
+                    Margin = new Thickness(4),
+                    CornerRadius = new CornerRadius(8),
+                    BoxShadow = new Avalonia.Media.BoxShadows(new Avalonia.Media.BoxShadow
+                    {
+                        OffsetX = 0,
+                        OffsetY = 2,
+                        Blur = 6,
+                        Color = Avalonia.Media.Color.FromArgb(0x30, 0, 0, 0),
+                    }),
+                    Child = card,
                 };
 
                 // FP11 — переименование/удаление живут в контекстном меню по
@@ -1522,7 +1607,7 @@ public partial class SettingsWindow : Window
                     RefreshDesignGallery();
                 };
 
-                designGallery.Children.Add(card);
+                designGallery.Children.Add(cardShadowWrapper);
             }
         }
 
@@ -1639,6 +1724,12 @@ public partial class SettingsWindow : Window
                     Cursor = handCursor,
                 };
                 ToolTip.SetTip(swatch, hex);
+                // FP18 — по умолчанию подсказка следует за курсором (PlacementMode.Pointer)
+                // и на маленьком 28px кружке перекрывает собой сам цвет, на который
+                // навелись (живой фидбек, скриншот). Показываем её НИЖЕ кружка вместо
+                // этого — там свободное место, ничего не перекрывает.
+                ToolTip.SetPlacement(swatch, Avalonia.Controls.PlacementMode.Bottom);
+                ToolTip.SetVerticalOffset(swatch, 4);
 
                 swatch.PointerPressed += (_, _) =>
                 {
@@ -2102,10 +2193,12 @@ public partial class SettingsWindow : Window
         var enabledCheckBox = new CheckBox { Content = "Включить автоматизацию", IsChecked = automationSettings.IsEnabled };
         root.Children.Add(enabledCheckBox);
 
-        root.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 8) });
-        root.Children.Add(new TextBlock { Text = "Сейчас активно", FontWeight = Avalonia.Media.FontWeight.Bold });
+        // FP17 Фаза 4, п.15 — блок ("Состояние", было "Сейчас активно")
+        // добавляется в root в САМОМ КОНЦЕ этого метода (после "Новое
+        // правило"), а не здесь — согласовано с пользователем перенести его
+        // в низ вкладки. activeNowPanel объявлен уже тут (нужен
+        // RefreshActiveNow ниже), но в дерево визуально попадает позже.
         var activeNowPanel = new StackPanel { Spacing = 2 };
-        root.Children.Add(activeNowPanel);
 
         void RefreshActiveNow()
         {
@@ -2130,10 +2223,13 @@ public partial class SettingsWindow : Window
                     continue;
                 }
 
-                var ruleLabel = string.IsNullOrWhiteSpace(active.Name) ? "(без названия)" : active.Name;
+                // FP17 Фаза 4, п.15 — без имени правила (было
+                // `DELL: «80%» → 80%`, дублирование для безымянных правил) —
+                // согласовано с пользователем: везде только монитор→значение,
+                // независимо от того, названо правило или нет.
                 activeNowPanel.Children.Add(new TextBlock
                 {
-                    Text = $"{MonitorLabel.Format(monitor, monitorNames)}: «{ruleLabel}» → {active.Percent}%",
+                    Text = $"{MonitorLabel.Format(monitor, monitorNames)} → {active.Percent}%",
                 });
             }
 
@@ -2485,11 +2581,16 @@ public partial class SettingsWindow : Window
         // Все переменные, на которые ссылаются локальные функции/шаблоны ниже, объявлены
         // здесь заранее (просто как объекты, без ItemTemplate) — иначе анализ определённого
         // присваивания C# ругается, даже если реально эти обработчики выполнятся значительно позже.
+        // FP17 Фаза 4, п.6 — без PlaceholderText поле выглядело как пустой
+        // прямоугольник без подсказки, что оно вообще для чего-то (можно и
+        // вводить текст для фильтрации списка, а не только выбирать из
+        // выпадающего списка).
         var processAutoComplete = new AutoCompleteBox
         {
             MinWidth = 260,
             FilterMode = AutoCompleteFilterMode.Contains,
             MinimumPrefixLength = 0,
+            PlaceholderText = "Введите или выберите процесс…",
         };
         var hiddenProcessesLabel = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
         var hiddenProcessesRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
@@ -2954,6 +3055,13 @@ public partial class SettingsWindow : Window
         newRulePanel.Children.Add(formButtonsRow);
 
         root.Children.Add(newRuleCard);
+
+        // FP17 Фаза 4, п.15 — перенесено в самый низ вкладки (было сразу под
+        // переключателем "Включить автоматизацию"), заголовок переименован
+        // "Сейчас активно" → "Состояние" (согласовано с пользователем).
+        root.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 8) });
+        root.Children.Add(new TextBlock { Text = "Состояние", FontWeight = Avalonia.Media.FontWeight.Bold });
+        root.Children.Add(activeNowPanel);
     }
 
     private void BuildIdleTab(StackPanel root)
@@ -3014,9 +3122,13 @@ public partial class SettingsWindow : Window
         };
 
         root.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 8) });
-        root.Children.Add(new TextBlock { Text = "Сейчас", FontWeight = Avalonia.Media.FontWeight.Bold });
-        var statusText = new TextBlock();
-        root.Children.Add(statusText);
+        // FP17 Фаза 4, п.16 — "Сейчас" + значение на двух строках → одна
+        // строка "Состояние: ..." (согласовано с пользователем).
+        var statusRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        statusRow.Children.Add(new TextBlock { Text = "Состояние:", FontWeight = Avalonia.Media.FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center });
+        var statusText = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
+        statusRow.Children.Add(statusText);
+        root.Children.Add(statusRow);
 
         void RefreshStatus()
         {
