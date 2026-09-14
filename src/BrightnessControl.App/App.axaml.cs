@@ -75,6 +75,22 @@ public partial class App : Application
                 {
                     storageModeStore.Save(chosen);
                     firstRunWindow.Close();
+
+                    // FP7 Фаза 4 — при "Установить" копируемся в выбранную папку,
+                    // создаём ярлык/автозапуск и запускаем УЖЕ УСТАНОВЛЕННУЮ копию —
+                    // если это реально произошло, этот (временный, из исходного
+                    // места запуска) процесс должен завершиться, а не продолжать
+                    // жить второй копией рядом с новой.
+                    if (chosen.Mode == StorageMode.Installed && chosen.InstallDirectory is not null)
+                    {
+                        var relaunched = InstallService.Install(chosen.InstallDirectory);
+                        if (relaunched)
+                        {
+                            desktop.Shutdown();
+                            return;
+                        }
+                    }
+
                     ContinueStartup(chosen, desktop);
                 };
                 firstRunWindow.Show();
