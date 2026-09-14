@@ -5,11 +5,21 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <!-- FP7 — единственный источник правды для версии (заглушка, финальная
-         схема версионирования — отдельный вопрос, не решён). Читается в
-         рантайме через AppVersion.Current (Services/AppVersion.cs), нигде
-         не завязана на app.manifest — тот нигде кодом не читается. -->
+    <!-- FP7 — единственный источник правды для версии. Читается в рантайме
+         через AppVersion.Current (Services/AppVersion.cs), нигде не завязана
+         на app.manifest — тот нигде кодом не читается. -->
     <Version>0.1.0</Version>
+    <!-- FP7 — без этого у exe (и у любого ярлыка на него — Пуск, Рабочий
+         стол) был generic-иконка Windows, не похожая на настоящую иконку
+         приложения (баг, замечен пользователем на реальной установке,
+         2026-09-15). Assets/app.ico — многоразмерный (16/32/48/256),
+         сгенерирован из ТОЙ ЖЕ отрисовки, что и живая иконка трея
+         (TrayIconRenderer.RenderIcoBytes, дизайн Spokes + цвет #F2900C —
+         значения по умолчанию из TraySettings), чтобы статичная иконка
+         совпадала с тем, что пользователь реально увидит в трее. Не имеет
+         отношения к самой живой иконке трея (та рисуется на лету через
+         Shell_NotifyIcon, независимо от этого файла). -->
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

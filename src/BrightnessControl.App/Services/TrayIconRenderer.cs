@@ -51,6 +51,58 @@ public static class TrayIconRenderer
         }
     }
 
+    // FP7 — статический многоразмерный .ico для файла exe/ярлыков (Пуск,
+    // Рабочий стол): в отличие от Render() (один размер 32px, только для
+    // живой иконки в трее через Shell_NotifyIcon), Explorer/ярлыкам нужно
+    // НЕСКОЛЬКО разрешений в одном файле, иначе крупные значки (рабочий
+    // стол, "Все приложения" плиткой) выглядят растянуто/размыто. Формат
+    // .ico поддерживает PNG-кадры начиная с Vista — упаковываем через
+    // System.Drawing.Bitmap.Save(..., ImageFormat.Png) для каждого размера,
+    // не через устаревший BMP+AND-маску. Не вызывается из обычного потока
+    // приложения — одноразовая генерация Assets/app.ico при сборке (см.
+    // README/комментарий у ApplicationIcon в .csproj).
+    public static byte[] RenderIcoBytes(TrayIconDesign design, Color baseColor, int scalePercent, int[] sizes)
+    {
+        var pngFrames = new byte[sizes.Length][];
+        for (var i = 0; i < sizes.Length; i++)
+        {
+            using var bmp = RenderBitmap(design, baseColor, scalePercent, sizes[i]);
+            using var ms = new MemoryStream();
+            bmp.Save(ms, ImageFormat.Png);
+            pngFrames[i] = ms.ToArray();
+        }
+
+        using var output = new MemoryStream();
+        using (var writer = new BinaryWriter(output))
+        {
+            writer.Write((ushort)0); // reserved
+            writer.Write((ushort)1); // type = icon
+            writer.Write((ushort)sizes.Length);
+
+            var dataOffset = 6 + 16 * sizes.Length;
+            for (var i = 0; i < sizes.Length; i++)
+            {
+                var size = sizes[i];
+                writer.Write((byte)(size >= 256 ? 0 : size));
+                writer.Write((byte)(size >= 256 ? 0 : size));
+                writer.Write((byte)0); // color palette — none (32bpp)
+                writer.Write((byte)0); // reserved
+                writer.Write((ushort)1); // color planes
+                writer.Write((ushort)32); // bits per pixel
+                writer.Write((uint)pngFrames[i].Length);
+                writer.Write((uint)dataOffset);
+                dataOffset += pngFrames[i].Length;
+            }
+
+            foreach (var frame in pngFrames)
+            {
+                writer.Write(frame);
+            }
+        }
+
+        return output.ToArray();
+    }
+
     public static Avalonia.Media.Imaging.Bitmap RenderPreview(TrayIconDesign design, Color baseColor, int scalePercent, int pixelSize = 32)
     {
         using var bmp = RenderBitmap(design, baseColor, scalePercent, pixelSize);

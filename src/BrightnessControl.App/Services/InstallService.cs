@@ -5,9 +5,10 @@ using BrightnessControl.Core;
 namespace BrightnessControl.App.Services;
 
 // FP7 Фаза 4 — механика выбора "Установить" в FirstRunWindow: копирует себя в
-// выбранную пользователем папку, создаёт ярлык в Пуск, включает автозапуск,
-// запускает копию и (если копия реально понадобилась) сигнализирует
-// вызывающему коду завершить текущий процесс.
+// выбранную пользователем папку, создаёт ярлык в Пуск И на Рабочем столе
+// (по прямому запросу пользователя, 2026-09-15 — "на всякий случай"),
+// включает автозапуск, запускает копию и (если копия реально понадобилась)
+// сигнализирует вызывающему коду завершить текущий процесс.
 public static class InstallService
 {
     public const string ExecutableFileName = "BrightnessControl.App.exe";
@@ -36,10 +37,17 @@ public static class InstallService
                 File.Copy(currentExePath, targetExePath, overwrite: true);
             }
 
-            var shortcutPath = Path.Combine(
+            const string description = "BrightnessControl — управление яркостью мониторов";
+
+            var startMenuShortcutPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.Programs),
                 "BrightnessControl.lnk");
-            ShellLinkFactory.CreateShortcut(shortcutPath, targetExePath, "BrightnessControl — управление яркостью мониторов");
+            ShellLinkFactory.CreateShortcut(startMenuShortcutPath, targetExePath, description);
+
+            var desktopShortcutPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                "BrightnessControl.lnk");
+            ShellLinkFactory.CreateShortcut(desktopShortcutPath, targetExePath, description);
 
             AutostartService.Enable(targetExePath);
         }
