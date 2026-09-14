@@ -7,6 +7,27 @@ public enum AppThemePreference
     Dark,
 }
 
+// FP16 Фаза 5 — как часто фоновая проверка обновлений повторяется, пока
+// приложение работает. Never полностью выключает фоновую проверку — остаётся
+// только ручная кнопка "Проверить сейчас" во вкладке "Обновления".
+public enum UpdateCheckInterval
+{
+    Daily,
+    Weekly,
+    Monthly,
+    Never,
+}
+
+// FP16 Фаза 5 — AllReleases учитывает любой тег новее текущей версии
+// (1.0 → 1.1 → 1.2 → 2.0), MajorOnly пропускает промежуточные минорные
+// версии и предлагает обновление только когда вырос СТАРШИЙ компонент
+// версии (1.0 → 2.0, минуя 1.1/1.2).
+public enum UpdateChannel
+{
+    AllReleases,
+    MajorOnly,
+}
+
 public sealed class AppSettings
 {
     public AppThemePreference Theme { get; set; } = AppThemePreference.System;
@@ -42,4 +63,13 @@ public sealed class AppSettings
     // "противоположным" — сейчас видно только на доп. лучах HUD-солнца — и
     // наоборот).
     public bool SwapAccentRoles { get; set; }
+
+    // FP16 Фаза 5 — настройки проверки обновлений, согласованы по
+    // Artifact-макету вкладки "Обновления". Проверка при запуске — С ПАУЗОЙ
+    // после старта (см. UpdateCheckService.StartPeriodicChecks), а не сразу —
+    // явная просьба пользователя не мешать инициализации приложения.
+    public bool CheckUpdatesOnStartup { get; set; } = true;
+    public UpdateCheckInterval UpdateCheckIntervalPreference { get; set; } = UpdateCheckInterval.Daily;
+    public UpdateChannel UpdateChannelPreference { get; set; } = UpdateChannel.AllReleases;
+    public bool IncludePrereleaseUpdates { get; set; }
 }

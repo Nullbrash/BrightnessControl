@@ -24,6 +24,7 @@ public partial class App : Application
     private IdleEngine? _idleEngine;
     private AccentColorService? _accentColorService;
     private MonitorLockService? _monitorLockService;
+    private UpdateCheckService? _updateCheckService;
     private int _globalPercent = 50;
     private int? _stickyClungValue;
 
@@ -126,6 +127,13 @@ public partial class App : Application
 
     private void ContinueStartup(StorageModeInfo storageMode, IClassicDesktopStyleApplicationLifetime desktop)
     {
+        // FP16 Фаза 6 — если предыдущий запуск был самообновлением, ".old"
+        // (переименованный старый exe) мог остаться неудалённым (сам себя
+        // удалить процесс не может, пока выполняется, см.
+        // SelfUpdateService.ApplyUpdateAndRestart) — убираем на СЛЕДУЮЩЕМ
+        // старте, тихо и best-effort.
+        SelfUpdateService.CleanupOldExecutable();
+
         var baseDirectory = storageMode.Mode == StorageMode.Portable && storageMode.PortableExeDirectory is not null
             ? storageMode.PortableExeDirectory
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BrightnessControl");
@@ -227,6 +235,12 @@ public partial class App : Application
         _trayService.ScrollNotches += OnScrollNotches;
         _trayService.RightClicked += e => Dispatcher.UIThread.Post(() => OpenSettingsWindow(e.CursorX, e.CursorY, desktop));
         _trayService.LeftClicked += e => Dispatcher.UIThread.Post(() => OpenGlobalSliderPopup(e.CursorX, e.CursorY));
+
+        // FP16 Фаза 5 — проверка обновлений: частота/канал/бета/проверка-при-
+        // запуске настраиваются вкладкой "Обновления" (AppSettings), сервис
+        // сам их читает при каждом запуске таймера.
+        _updateCheckService = new UpdateCheckService(_appSettings);
+        _updateCheckService.StartPeriodicChecks(TimeSpan.FromSeconds(45));
     }
 
     public static void ApplyTheme(AppThemePreference preference)
@@ -286,6 +300,7 @@ public partial class App : Application
                 _idleEngine,
                 _accentColorService,
                 _trayService,
+                _updateCheckService,
                 () => desktop.Shutdown());
             _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         }

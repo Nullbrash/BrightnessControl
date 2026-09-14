@@ -26,6 +26,7 @@ public partial class SettingsWindow : Window
     private readonly IdleEngine? _idleEngine;
     private readonly AccentColorService? _accentColorService;
     private readonly TrayService? _trayService;
+    private readonly UpdateCheckService? _updateCheckService;
     private readonly Action _onExitRequested;
 
     // FP13 — единственный экземпляр окна предпросмотра темы: повторный клик
@@ -56,6 +57,7 @@ public partial class SettingsWindow : Window
         _idleEngine = null;
         _accentColorService = null;
         _trayService = null;
+        _updateCheckService = null;
         _onExitRequested = () => { };
         InitializeComponent();
     }
@@ -70,6 +72,7 @@ public partial class SettingsWindow : Window
         IdleEngine? idleEngine,
         AccentColorService? accentColorService,
         TrayService? trayService,
+        UpdateCheckService? updateCheckService,
         Action onExitRequested)
     {
         _controller = controller;
@@ -81,6 +84,7 @@ public partial class SettingsWindow : Window
         _idleEngine = idleEngine;
         _accentColorService = accentColorService;
         _trayService = trayService;
+        _updateCheckService = updateCheckService;
         _onExitRequested = onExitRequested;
         InitializeComponent();
         BuildContent();
@@ -235,6 +239,7 @@ public partial class SettingsWindow : Window
                 new("Слайдеры яркости", BuildSliderStepTab),
                 new("Ярлык трея", BuildTrayTab),
                 new("Оформление", BuildAppearanceTab),
+                new("Обновления", BuildUpdatesTab),
             }),
             new("Автоматизация", new List<NavSubcategory>
             {
@@ -1132,6 +1137,393 @@ public partial class SettingsWindow : Window
         root.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 8) });
         root.Children.Add(new TextBlock { Text = "Иконка трея", FontWeight = Avalonia.Media.FontWeight.Bold });
         root.Children.Add(BuildTrayIconSection());
+    }
+
+    // FP16 Фаза 5 — согласовано по Artifact-макету: версия сверху,
+    // статус-карточка с цветным индикатором, кнопка ручной проверки (работает
+    // всегда, независимо от настроек ниже), разделитель, блок настроек.
+    private void BuildUpdatesTab(StackPanel root)
+    {
+        var versionRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var versionLabel = new TextBlock { Text = "Версия приложения", FontWeight = Avalonia.Media.FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(versionLabel, 0);
+        var versionValue = new TextBlock { Text = AppVersion.Current.ToString(3), VerticalAlignment = VerticalAlignment.Center };
+        versionValue.Bind(TextBlock.ForegroundProperty, this.GetResourceObservable("AppMuted"));
+        Grid.SetColumn(versionValue, 1);
+        versionRow.Children.Add(versionLabel);
+        versionRow.Children.Add(versionValue);
+        root.Children.Add(versionRow);
+
+        var statusCard = new Border
+        {
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(15, 13),
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 12, 0, 12),
+        };
+        statusCard.Bind(Border.BackgroundProperty, this.GetResourceObservable("AppSurface"));
+        statusCard.Bind(Border.BorderBrushProperty, this.GetResourceObservable("AppLineStrong"));
+
+        var statusRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        var statusDot = new Ellipse { Width = 9, Height = 9, Margin = new Thickness(0, 4, 0, 0), VerticalAlignment = VerticalAlignment.Top };
+        var statusText = new StackPanel { Spacing = 2 };
+        var statusTitle = new TextBlock { FontSize = 12.5, FontWeight = Avalonia.Media.FontWeight.Bold };
+        var statusSubtitle = new TextBlock { FontSize = 11, TextWrapping = Avalonia.Media.TextWrapping.Wrap, IsVisible = false };
+        statusSubtitle.Bind(TextBlock.ForegroundProperty, this.GetResourceObservable("AppMuted"));
+        // FP16 Фаза 6 — кнопка "Скачать и установить" появляется только когда
+        // реально есть куда скачивать (result.DownloadUrl не null). Двойной
+        // клик как подтверждение (согласовано с пользователем явно) — первый
+        // клик переключает текст на "Точно?", второй в течение нескольких
+        // секунд запускает скачивание+установку; без второго клика текст сам
+        // откатывается обратно.
+        // Border, а не Button: у Fluent-темы встроенный :pointerover-стиль
+        // ContentPresenter'а перехватывал фон при наведении курсора и жёлтый
+        // цвет пропадал (замечание пользователя после ручного теста) — тут
+        // фон и анимация полностью свои, системный hover-стиль их не трогает.
+        var installButtonLabel = new TextBlock { HorizontalAlignment = HorizontalAlignment.Center, FontSize = 12.5, FontWeight = Avalonia.Media.FontWeight.Bold };
+        var installButtonRestBrush = new Avalonia.Media.SolidColorBrush(ResolveThemeColor("AppNeutralRest", Avalonia.Media.Color.FromArgb(0x0D, 0x94, 0x8F, 0xA3)));
+        var installButtonInkBrush = new Avalonia.Media.SolidColorBrush(ResolveThemeColor("AppInk", Avalonia.Media.Color.Parse("#F1EEF7")));
+        installButtonLabel.Foreground = installButtonInkBrush;
+        var installButton = new Border
+        {
+            IsVisible = false,
+            Margin = new Thickness(0, 8, 0, 0),
+            Padding = new Thickness(14, 8, 14, 8),
+            CornerRadius = new CornerRadius(8),
+            Background = installButtonRestBrush,
+            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Child = installButtonLabel,
+        };
+        var installButtonEnabled = true;
+        var installProgressText = new TextBlock { FontSize = 11, IsVisible = false, Margin = new Thickness(0, 6, 0, 0), TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+        installProgressText.Bind(TextBlock.ForegroundProperty, this.GetResourceObservable("AppMuted"));
+        statusText.Children.Add(statusTitle);
+        statusText.Children.Add(statusSubtitle);
+        statusText.Children.Add(installButton);
+        statusText.Children.Add(installProgressText);
+        statusRow.Children.Add(statusDot);
+        statusRow.Children.Add(statusText);
+        statusCard.Child = statusRow;
+        root.Children.Add(statusCard);
+
+        var btnRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center };
+        var checkNowButton = new Button { Content = "Проверить сейчас" };
+        var lastCheckedText = new TextBlock { FontSize = 10.5, VerticalAlignment = VerticalAlignment.Center };
+        lastCheckedText.Bind(TextBlock.ForegroundProperty, this.GetResourceObservable("AppFaint"));
+        btnRow.Children.Add(checkNowButton);
+        btnRow.Children.Add(lastCheckedText);
+        root.Children.Add(btnRow);
+
+        string? pendingDownloadUrl = null;
+        string? pendingVersion = null;
+        var awaitingConfirm = false;
+        DispatcherTimer? confirmResetTimer = null;
+
+        // FP16 Фаза 6 (правка после ручного теста) — плоская заливка почти не
+        // выделялась в состоянии "Точно? Нажмите ещё раз" и пропадала при
+        // наведении (см. комментарий у installButton выше). Заменено на ту же
+        // диагональную sweep-анимацию, что и у "стеновых" кнопок
+        // (BuildSweepWallButton) — полоса идёт из левого верхнего угла в
+        // правый нижний, как попросил пользователь. AppWarning — тот же
+        // жёлтый токен, что у "Изменить" в карточке автоматизации: семантика
+        // "важное, но не разрушительное действие".
+        DispatcherTimer? installSweepTimer = null;
+
+        void PlayInstallSweep(Avalonia.Media.Color targetColor, Avalonia.Media.Color targetTextColor)
+        {
+            installSweepTimer?.Stop();
+            installButtonLabel.Foreground = new Avalonia.Media.SolidColorBrush(targetTextColor);
+
+            var sweepGradient = new Avalonia.Media.LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new Avalonia.Media.GradientStop(targetColor, 0),
+                    new Avalonia.Media.GradientStop(Avalonia.Media.Colors.White, 0),
+                    new Avalonia.Media.GradientStop(targetColor, 0),
+                },
+            };
+
+            const double bandWidth = 0.28;
+            var progress = 0.0;
+            installButton.Background = sweepGradient;
+            installSweepTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+            installSweepTimer.Tick += (_, _) =>
+            {
+                progress += 0.06;
+                if (progress >= 1.0)
+                {
+                    installSweepTimer?.Stop();
+                    installSweepTimer = null;
+                    installButton.Background = new Avalonia.Media.SolidColorBrush(targetColor);
+                    return;
+                }
+
+                var center = -bandWidth + progress * (1 + 2 * bandWidth);
+                sweepGradient.GradientStops[0].Offset = Math.Clamp(center - bandWidth, 0, 1);
+                sweepGradient.GradientStops[1].Offset = Math.Clamp(center, 0, 1);
+                sweepGradient.GradientStops[2].Offset = Math.Clamp(center + bandWidth, 0, 1);
+            };
+            installSweepTimer.Start();
+        }
+
+        void SetInstallButtonNormalStyle()
+        {
+            installSweepTimer?.Stop();
+            installSweepTimer = null;
+            installButton.Background = installButtonRestBrush;
+            installButtonLabel.Foreground = installButtonInkBrush;
+        }
+
+        void SetInstallButtonConfirmStyle()
+        {
+            var warningColor = ResolveThemeColor("AppWarning", Avalonia.Media.Color.Parse("#E8C23D"));
+            var warningInkColor = ResolveThemeColor("AppWarningInk", Avalonia.Media.Color.Parse("#241C02"));
+            PlayInstallSweep(warningColor, warningInkColor);
+        }
+
+        void SetInstallButtonEnabled(bool enabled)
+        {
+            installButtonEnabled = enabled;
+            installButton.Opacity = enabled ? 1.0 : 0.6;
+            installButton.Cursor = new Avalonia.Input.Cursor(enabled ? Avalonia.Input.StandardCursorType.Hand : Avalonia.Input.StandardCursorType.No);
+        }
+
+        void ResetInstallButtonText()
+        {
+            awaitingConfirm = false;
+            confirmResetTimer?.Stop();
+            SetInstallButtonNormalStyle();
+            installButtonLabel.Text = $"Скачать и установить {pendingVersion}";
+        }
+
+        void RenderResult(UpdateCheckResult? result)
+        {
+            installButton.IsVisible = false;
+            installProgressText.IsVisible = false;
+            pendingDownloadUrl = null;
+            pendingVersion = null;
+
+            if (result is null)
+            {
+                statusDot.Bind(Shape.FillProperty, this.GetResourceObservable("AppFaint"));
+                statusTitle.Text = "Проверка ещё не выполнялась";
+                statusSubtitle.Text = "Автоматическая проверка произойдёт вскоре после запуска.";
+                statusSubtitle.IsVisible = true;
+                lastCheckedText.Text = string.Empty;
+                return;
+            }
+
+            if (result.Error is not null)
+            {
+                statusDot.Bind(Shape.FillProperty, this.GetResourceObservable("AppDanger"));
+                statusTitle.Text = "Не удалось проверить обновления";
+                statusSubtitle.Text = "Проверьте подключение к интернету и попробуйте ещё раз.";
+                statusSubtitle.IsVisible = true;
+            }
+            else if (result.UpdateAvailable)
+            {
+                statusDot.Bind(Shape.FillProperty, this.GetResourceObservable("AppAccentBrush"));
+                statusTitle.Text = $"Доступна новая версия — {result.LatestVersion}";
+
+                if (result.DownloadUrl is not null)
+                {
+                    statusSubtitle.IsVisible = false;
+                    pendingDownloadUrl = result.DownloadUrl;
+                    pendingVersion = result.LatestVersion;
+                    installButton.IsVisible = true;
+                    ResetInstallButtonText();
+                }
+                else
+                {
+                    statusSubtitle.Text = "Не найден файл для скачивания в этом релизе.";
+                    statusSubtitle.IsVisible = true;
+                }
+            }
+            else
+            {
+                statusDot.Bind(Shape.FillProperty, this.GetResourceObservable("AppGood"));
+                statusTitle.Text = "У вас последняя версия";
+                statusSubtitle.IsVisible = false;
+            }
+
+            lastCheckedText.Text = $"Проверено {result.CheckedAt:d MMMM в HH:mm}";
+        }
+
+        installButton.PointerPressed += async (_, e) =>
+        {
+            if (!installButtonEnabled)
+            {
+                return;
+            }
+            e.Handled = true;
+
+            if (!awaitingConfirm)
+            {
+                awaitingConfirm = true;
+                installButtonLabel.Text = "Точно? Нажмите ещё раз";
+                SetInstallButtonConfirmStyle();
+                confirmResetTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+                confirmResetTimer.Tick += (_, _) => ResetInstallButtonText();
+                confirmResetTimer.Start();
+                return;
+            }
+
+            confirmResetTimer?.Stop();
+            awaitingConfirm = false;
+            SetInstallButtonNormalStyle();
+
+            if (pendingDownloadUrl is null)
+            {
+                return;
+            }
+
+            SetInstallButtonEnabled(false);
+            installProgressText.Text = "Скачивание обновления…";
+            installProgressText.IsVisible = true;
+
+            // Progress<T> захватывает текущий SynchronizationContext (UI-поток,
+            // мы внутри async-обработчика клика) — коллбэк сам маршалится
+            // обратно в UI-поток, отдельный Dispatcher.UIThread.Post не нужен.
+            var downloadProgress = new Progress<SelfUpdateService.DownloadProgress>(p =>
+            {
+                var receivedMb = p.BytesReceived / 1024.0 / 1024.0;
+                var speedMb = p.BytesPerSecond / 1024.0 / 1024.0;
+                if (p.TotalBytes is > 0)
+                {
+                    var totalMb = p.TotalBytes.Value / 1024.0 / 1024.0;
+                    var percent = (int)(p.BytesReceived * 100 / p.TotalBytes.Value);
+                    installProgressText.Text = $"Скачивание обновления… {percent}% · {receivedMb:0.0} МБ из {totalMb:0.0} МБ · {speedMb:0.0} МБ/с";
+                }
+                else
+                {
+                    installProgressText.Text = $"Скачивание обновления… {receivedMb:0.0} МБ · {speedMb:0.0} МБ/с";
+                }
+            });
+
+            try
+            {
+                var downloadedPath = await SelfUpdateService.DownloadUpdateAsync(pendingDownloadUrl, downloadProgress);
+                installProgressText.Text = "Установка и перезапуск…";
+                SelfUpdateService.ApplyUpdateAndRestart(downloadedPath);
+                // Новая копия уже запущена (ApplyUpdateAndRestart) — этот
+                // процесс (со своим окном настроек) должен завершиться, а не
+                // продолжать жить рядом со свежезапущенной копией.
+                _onExitRequested();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Net.Http.HttpRequestException or InvalidOperationException)
+            {
+                installProgressText.Text = $"Не удалось установить обновление: {ex.Message}";
+                SetInstallButtonEnabled(true);
+                ResetInstallButtonText();
+            }
+        };
+
+        RenderResult(_updateCheckService?.LastResult);
+
+        checkNowButton.Click += async (_, _) =>
+        {
+            if (_updateCheckService is null)
+            {
+                return;
+            }
+
+            checkNowButton.IsEnabled = false;
+            var result = await _updateCheckService.CheckNowAsync();
+            RenderResult(result);
+            checkNowButton.IsEnabled = true;
+        };
+        if (_updateCheckService is not null)
+        {
+            _updateCheckService.Checked += (_, result) => Dispatcher.UIThread.Post(() => RenderResult(result));
+        }
+
+        root.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 8) });
+        root.Children.Add(new TextBlock { Text = "Настройки проверки", FontWeight = Avalonia.Media.FontWeight.Bold, Margin = new Thickness(0, 0, 0, 6) });
+
+        void RestartPeriodicChecks() => _updateCheckService?.StartPeriodicChecks(TimeSpan.FromSeconds(45));
+
+        var startupRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        var startupCheckBox = new CheckBox { Content = "Проверять при запуске приложения", IsChecked = _appSettings.CheckUpdatesOnStartup };
+        ToolTip.SetTip(startupCheckBox, "Отключает только проверку СРАЗУ после запуска — фоновая проверка по расписанию ниже продолжает работать независимо от этого переключателя.");
+        startupCheckBox.IsCheckedChanged += (_, _) =>
+        {
+            _appSettings.CheckUpdatesOnStartup = startupCheckBox.IsChecked ?? true;
+            _appSettingsStore.Save(_appSettings);
+            RestartPeriodicChecks();
+        };
+        startupRow.Children.Add(startupCheckBox);
+        root.Children.Add(startupRow);
+
+        var intervalRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Margin = new Thickness(0, 8, 0, 0) };
+        intervalRow.Children.Add(new TextBlock { Text = "Частота фоновой проверки:", VerticalAlignment = VerticalAlignment.Center, Width = 180 });
+        var intervalOptions = new (UpdateCheckInterval Value, string Label)[]
+        {
+            (UpdateCheckInterval.Daily, "Раз в день"),
+            (UpdateCheckInterval.Weekly, "Раз в неделю"),
+            (UpdateCheckInterval.Monthly, "Раз в месяц"),
+            (UpdateCheckInterval.Never, "Никогда"),
+        };
+        var intervalCombo = new ComboBox
+        {
+            ItemsSource = intervalOptions.Select(o => o.Label).ToList(),
+            SelectedIndex = Array.FindIndex(intervalOptions, o => o.Value == _appSettings.UpdateCheckIntervalPreference),
+            MinWidth = 160,
+        };
+        intervalCombo.SelectionChanged += (_, _) =>
+        {
+            if (intervalCombo.SelectedIndex < 0)
+            {
+                return;
+            }
+
+            _appSettings.UpdateCheckIntervalPreference = intervalOptions[intervalCombo.SelectedIndex].Value;
+            _appSettingsStore.Save(_appSettings);
+            RestartPeriodicChecks();
+        };
+        intervalRow.Children.Add(intervalCombo);
+        root.Children.Add(intervalRow);
+
+        var channelRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Margin = new Thickness(0, 8, 0, 0) };
+        var channelLabel = new TextBlock { Text = "Канал обновлений:", VerticalAlignment = VerticalAlignment.Center, Width = 180 };
+        ToolTip.SetTip(channelLabel, "«Только крупные» пропускает промежуточные версии (например 1.1, 1.2) и предлагает обновление только когда вырос старший компонент версии — например 1.0 → 2.0.");
+        channelRow.Children.Add(channelLabel);
+        var channelOptions = new (UpdateChannel Value, string Label)[]
+        {
+            (UpdateChannel.AllReleases, "Все версии"),
+            (UpdateChannel.MajorOnly, "Только крупные"),
+        };
+        var channelCombo = new ComboBox
+        {
+            ItemsSource = channelOptions.Select(o => o.Label).ToList(),
+            SelectedIndex = Array.FindIndex(channelOptions, o => o.Value == _appSettings.UpdateChannelPreference),
+            MinWidth = 160,
+        };
+        channelCombo.SelectionChanged += (_, _) =>
+        {
+            if (channelCombo.SelectedIndex < 0)
+            {
+                return;
+            }
+
+            _appSettings.UpdateChannelPreference = channelOptions[channelCombo.SelectedIndex].Value;
+            _appSettingsStore.Save(_appSettings);
+        };
+        channelRow.Children.Add(channelCombo);
+        root.Children.Add(channelRow);
+
+        var prereleaseRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Margin = new Thickness(0, 8, 0, 0) };
+        var prereleaseCheckBox = new CheckBox { Content = "Включать бета-версии", IsChecked = _appSettings.IncludePrereleaseUpdates };
+        prereleaseCheckBox.IsCheckedChanged += (_, _) =>
+        {
+            _appSettings.IncludePrereleaseUpdates = prereleaseCheckBox.IsChecked ?? false;
+            _appSettingsStore.Save(_appSettings);
+        };
+        prereleaseRow.Children.Add(prereleaseCheckBox);
+        root.Children.Add(prereleaseRow);
     }
 
     // Стиль HUD — параметрический выбор (FP12 Фаза 4, п.6), по аналогии с
