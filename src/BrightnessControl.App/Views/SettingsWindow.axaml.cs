@@ -108,7 +108,7 @@ public partial class SettingsWindow : Window
         // вокруг Show/ShowDialog конкретного вызова).
         Deactivated += (_, _) =>
         {
-            if (!_suppressDeactivateClose && _themePreviewWindow is null)
+            if (!_suppressDeactivateClose && !_updateInProgress && _themePreviewWindow is null)
             {
                 Close();
             }
@@ -116,6 +116,17 @@ public partial class SettingsWindow : Window
     }
 
     private bool _suppressDeactivateClose;
+
+    // FP16 (правка 2026-09-15, по прямому запросу пользователя) — окно
+    // ведёт себя как поповер трея и закрывается при потере фокуса (см.
+    // Deactivated ниже), но во время самообновления это скрывало прогресс
+    // скачивания у пользователя, стоило кликнуть мимо (реально произошло:
+    // обновление в итоге прошло успешно, но пользователь решил, что оно
+    // "остановилось", т.к. просто перестал видеть окно). Флаг ставится в
+    // installButton.PointerPressed на время скачивания+установки, снимается
+    // и в успехе (окно всё равно исчезнет — процесс перезапускается), и в
+    // catch на ошибке.
+    private bool _updateInProgress;
 
     // Окно без рамки (WindowDecorations="None"), поэтому своего крестика у него нет —
     // рисуем свой: красный фон и белый крестик всегда, а при наведении крестик
@@ -1421,6 +1432,7 @@ public partial class SettingsWindow : Window
             }
 
             SetInstallButtonEnabled(false);
+            _updateInProgress = true;
             installProgressText.Text = "Скачивание обновления…";
             installProgressText.IsVisible = true;
 
@@ -1458,6 +1470,10 @@ public partial class SettingsWindow : Window
                 installProgressText.Text = $"Не удалось установить обновление: {ex.Message}";
                 SetInstallButtonEnabled(true);
                 ResetInstallButtonText();
+            }
+            finally
+            {
+                _updateInProgress = false;
             }
         };
 
