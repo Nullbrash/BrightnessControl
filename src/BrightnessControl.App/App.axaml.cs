@@ -58,7 +58,6 @@ public partial class App : Application
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "Programs",
                     "BrightnessControl");
-                var portableCandidateDirectory = Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
 
                 // AppAccentBrush/AppAccentOnBrush обычно регистрирует
                 // AccentColorService — но он создаётся только внутри
@@ -72,25 +71,31 @@ public partial class App : Application
                 // правильно, с учётом сохранённых настроек акцента.
                 BootstrapAccentColorForFirstRun();
 
-                var firstRunWindow = new FirstRunWindow(defaultInstallDirectory, portableCandidateDirectory);
+                var firstRunWindow = new FirstRunWindow(defaultInstallDirectory);
                 firstRunWindow.Confirmed += (_, chosen) =>
                 {
                     storageModeStore.Save(chosen);
                     firstRunWindow.Close();
 
                     // FP7 Фаза 4 — при "Установить" копируемся в выбранную папку,
-                    // создаём ярлык/автозапуск и запускаем УЖЕ УСТАНОВЛЕННУЮ копию —
-                    // если это реально произошло, этот (временный, из исходного
-                    // места запуска) процесс должен завершиться, а не продолжать
-                    // жить второй копией рядом с новой.
-                    if (chosen.Mode == StorageMode.Installed && chosen.InstallDirectory is not null)
+                    // создаём ярлык/автозапуск и запускаем УЖЕ УСТАНОВЛЕННУЮ копию.
+                    // FP7 (правка 2026-09-15, по запросу пользователя) — Portable
+                    // теперь ТОЖЕ копируется в выбранную папку (InstallPortable, та
+                    // же механика без ярлыков/автозапуска) — больше не остаётся там,
+                    // где exe изначально запустили (например в "Загрузках"). В обоих
+                    // случаях, если копирование реально произошло, этот (временный,
+                    // из исходного места запуска) процесс должен завершиться, а не
+                    // продолжать жить второй копией рядом с новой.
+                    var relaunched = chosen.Mode switch
                     {
-                        var relaunched = InstallService.Install(chosen.InstallDirectory);
-                        if (relaunched)
-                        {
-                            desktop.Shutdown();
-                            return;
-                        }
+                        StorageMode.Installed when chosen.InstallDirectory is not null => InstallService.Install(chosen.InstallDirectory),
+                        StorageMode.Portable when chosen.PortableExeDirectory is not null => InstallService.InstallPortable(chosen.PortableExeDirectory),
+                        _ => false,
+                    };
+                    if (relaunched)
+                    {
+                        desktop.Shutdown();
+                        return;
                     }
 
                     ContinueStartup(chosen, desktop);

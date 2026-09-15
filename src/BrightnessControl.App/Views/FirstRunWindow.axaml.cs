@@ -22,28 +22,33 @@ namespace BrightnessControl.App.Views;
 // не стоит своей цены для одноразового экрана.
 public partial class FirstRunWindow : Window
 {
-    private readonly string _portableDirectory;
+    // FP7 (правка 2026-09-15) — раньше Portable ВСЕГДА оставался там, где
+    // лежал exe (см. portableDirectory ниже, был отдельным параметром) —
+    // прямая жалоба пользователя: если запустить exe из "Загрузок", туда же
+    // сыпались все JSON-файлы настроек вперемешку со скачанным мусором.
+    // Теперь ОДНА общая папка (_installDirectory) используется ОБОИМИ
+    // вариантами — разница только в том, что "Установить" ещё создаёт
+    // ярлыки/автозапуск (см. InstallService.Install/InstallPortable).
     private string _installDirectory;
 
     private TextBlock _installPathText = null!;
     private TextBlock _installErrorText = null!;
     private TextBlock _installPermTip = null!;
     private Button _installButton = null!;
+    private Button _portableButton = null!;
 
     public event EventHandler<StorageModeInfo>? Confirmed;
 
     // Нужен только для XAML-дизайнера/превью.
     public FirstRunWindow()
     {
-        _portableDirectory = null!;
         _installDirectory = null!;
         InitializeComponent();
     }
 
-    public FirstRunWindow(string defaultInstallDirectory, string portableDirectory)
+    public FirstRunWindow(string defaultInstallDirectory)
     {
         _installDirectory = defaultInstallDirectory;
-        _portableDirectory = portableDirectory;
         InitializeComponent();
         BuildContent();
     }
@@ -131,7 +136,7 @@ public partial class FirstRunWindow : Window
 
         var hint = new TextBlock
         {
-            Text = "Имеет значение только для варианта \"Установить\" ниже.",
+            Text = "Используется обоими вариантами ниже — и \"Установить\", и Portable копируются именно сюда.",
             FontSize = 10.5,
         };
         hint.Bind(TextBlock.ForegroundProperty, this.GetResourceObservable("AppFaint"));
@@ -208,6 +213,7 @@ public partial class FirstRunWindow : Window
         _installErrorText.IsVisible = !canWrite;
         _installPermTip.IsVisible = !canWrite;
         _installButton.IsEnabled = canWrite;
+        _portableButton.IsEnabled = canWrite;
     }
 
     private Border BuildInstallCard()
@@ -260,16 +266,12 @@ public partial class FirstRunWindow : Window
 
     private Border BuildPortableCard()
     {
-        var canUsePortable = FirstRunDetector.CanWriteTo(_portableDirectory);
-
         var titleRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
         titleRow.Children.Add(new TextBlock { Text = "Portable", FontSize = 13, FontWeight = Avalonia.Media.FontWeight.Bold });
 
         var desc = new TextBlock
         {
-            Text = canUsePortable
-                ? "Настройки хранятся рядом с этим файлом — переносите на флешке, ничего не меняет на компьютере."
-                : "Недоступно — папка, откуда запущен файл, доступна только для чтения.",
+            Text = "Копируется в папку выше и работает оттуда — настройки рядом с файлом, но БЕЗ ярлыков и автозапуска (в отличие от \"Установить\"). Переносится на флешке вместе с этой папкой.",
             FontSize = 11.5,
             TextWrapping = Avalonia.Media.TextWrapping.Wrap,
             Margin = new Thickness(0, 4, 0, 0),
@@ -280,39 +282,24 @@ public partial class FirstRunWindow : Window
         content.Children.Add(titleRow);
         content.Children.Add(desc);
 
-        var portableButton = new Button
+        _portableButton = new Button
         {
-            Content = "Выбрать",
+            Content = "Portable",
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 10, 0, 0),
-            IsEnabled = canUsePortable,
         };
-        portableButton.Click += (_, _) => Confirmed?.Invoke(this, new StorageModeInfo
+        _portableButton.Click += (_, _) => Confirmed?.Invoke(this, new StorageModeInfo
         {
             Mode = StorageMode.Portable,
-            PortableExeDirectory = _portableDirectory,
+            PortableExeDirectory = _installDirectory,
         });
-        content.Children.Add(portableButton);
-
-        if (!canUsePortable)
-        {
-            var tip = new TextBlock
-            {
-                Text = "Совет: разрешите запись в свойствах этой папки (снять \"Только чтение\") и перезапустите файл — Portable станет доступен.",
-                FontSize = 10.5,
-                TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-                Margin = new Thickness(0, 8, 0, 0),
-            };
-            tip.Bind(TextBlock.ForegroundProperty, this.GetResourceObservable("AppFaint"));
-            content.Children.Add(tip);
-        }
+        content.Children.Add(_portableButton);
 
         var card = new Border
         {
             CornerRadius = new CornerRadius(10),
             Padding = new Thickness(15, 13),
             BorderThickness = new Thickness(1),
-            Opacity = canUsePortable ? 1.0 : 0.6,
             Child = content,
         };
         card.Bind(Border.BackgroundProperty, this.GetResourceObservable("AppSurface"));

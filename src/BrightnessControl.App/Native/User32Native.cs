@@ -117,4 +117,14 @@ internal static class User32Native
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, ref HIGHCONTRAST pvParam, uint fWinIni);
+
+    public const uint MB_OK = 0x0;
+    public const uint MB_ICONINFORMATION = 0x40;
+
+    // Используется ТОЛЬКО в Program.cs для "уже запущена" — на этом этапе
+    // Avalonia ещё не инициализирована (проверка Mutex идёт до
+    // BuildAvaloniaApp), обычное Avalonia-окно тут недоступно, а нативный
+    // MessageBox не требует вообще никакой инициализации GUI-фреймворка.
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int MessageBoxW(IntPtr hWnd, string text, string caption, uint type);
 }
