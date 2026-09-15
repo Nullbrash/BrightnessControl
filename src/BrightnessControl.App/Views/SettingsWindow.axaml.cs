@@ -1582,11 +1582,16 @@ public partial class SettingsWindow : Window
         root.Children.Add(prereleaseRow);
 
         // FP7 — отложенный пункт из первоначального плана ("Вне объёма
-        // сейчас"), реализован по прямому запросу пользователя. Виден
-        // только в режиме "Установить" (InstallService.Install включает
-        // автозапуск сразу при установке) — в Portable-режиме автозапуска
-        // нет вообще, переключатель показывать нечего.
-        if (_storageMode?.Mode == StorageMode.Installed)
+        // сейчас"), реализован по прямому запросу пользователя. Изначально
+        // был виден только в режиме "Установить" (тот включает автозапуск
+        // СРАЗУ при установке, без переключателя) — но пользователь
+        // сообщил, что его реальная Portable-копия не стартовала после
+        // перезагрузки (ожидаемо: Portable сознательно не трогает
+        // автозапуск при установке), и явно попросил переключатель и там
+        // тоже — просто выключен по умолчанию (в отличие от "Установить",
+        // где включается автоматически), раз Portable по духу "ничего не
+        // трогает в системе, пока не попросят".
+        if (_storageMode?.Mode is StorageMode.Installed or StorageMode.Portable)
         {
             root.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 8) });
             root.Children.Add(new TextBlock { Text = "Автозапуск", FontWeight = Avalonia.Media.FontWeight.Bold, Margin = new Thickness(0, 0, 0, 6) });
