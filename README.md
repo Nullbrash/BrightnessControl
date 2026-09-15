@@ -68,6 +68,10 @@ dotnet publish src/BrightnessControl.App/BrightnessControl.App.csproj -p:Publish
 <a id="versioning"></a>
 ## Версионирование
 
+Пошаговый чек-лист выпуска релиза (что именно бампить, как собирать,
+что делать с тестовыми релизами) — [RELEASING.md](RELEASING.md). Здесь
+— только объяснение самой схемы.
+
 Версия состоит из четырёх чисел `Major.Minor.Build.Revision`
 (например `0.1.2.0`), и каждое число значит нечто конкретное — это не
 обычный [SemVer](https://semver.org/), а осознанно расширенная схема под
